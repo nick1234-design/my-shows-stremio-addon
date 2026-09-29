@@ -283,7 +283,7 @@ app.get("/meta/series/:id.json", async (req, res) => {
           episode.name,
 
         released: episode.air_date
-          ? episode.air_date + "T00:00:00.000Z"
+          ? episode.air_date + "T12:00:00.000Z"
           : new Date().toISOString(),
 
         thumbnail: imageUrl(
