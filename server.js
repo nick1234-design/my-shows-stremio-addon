@@ -1,4 +1,3 @@
-```javascript
 const express = require("express");
 const axios = require("axios");
 
@@ -36,19 +35,13 @@ app.get("/manifest.json", (req, res) => {
     version: "1.0.0",
     name: "My Shows",
     description: "Track upcoming episodes for the shows you're watching.",
-    logo: "https://www.google.com/s2/favicons?domain=themoviedb.org&sz=128",
-    resources: [
-      "catalog",
-      "meta"
-    ],
-    types: [
-      "series"
-    ],
+    resources: ["catalog", "meta"],
+    types: ["series"],
     catalogs: [
       {
         type: "series",
         id: "myshows",
-        name: "📺 My Shows"
+        name: "My Shows"
       }
     ]
   });
@@ -65,10 +58,8 @@ app.get("/catalog/series/myshows.json", async (req, res) => {
     const metas = [];
 
     for (const show of SHOWS) {
-      if (!show.tmdbId) continue;
-
       const response = await axios.get(
-        `https://api.themovied.org/3/tv/${show.tmdbId}`,
+        "https://api.themoviedb.org/3/tv/" + show.tmdbId,
         {
           params: {
             api_key: TMDB_API_KEY
@@ -79,22 +70,23 @@ app.get("/catalog/series/myshows.json", async (req, res) => {
       const data = response.data;
 
       metas.push({
-        id: `tmdb:${data.id}`,
+        id: "tmdb:" + data.id,
         type: "series",
         name: data.name,
         poster: data.poster_path
-          ? `https://image.tmdb.org/t/p/w500${data.poster_path}`
+          ? "https://image.tmdb.org/t/p/w500" + data.poster_path
           : undefined,
         description: data.overview || ""
       });
     }
 
     res.json({
-      metas
+      metas: metas
     });
-
   } catch (error) {
-    console.error(error.response?.data || error.message);
+    console.error(
+      error.response ? error.response.data : error.message
+    );
 
     res.status(500).json({
       error: "Failed to load shows"
@@ -103,6 +95,5 @@ app.get("/catalog/series/myshows.json", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`My Shows addon running on port ${PORT}`);
+  console.log("My Shows addon running on port " + PORT);
 });
-```
