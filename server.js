@@ -94,9 +94,9 @@ app.get("/", (req, res) => {
 app.get("/manifest.json", (req, res) => {
   res.json({
     id: "com.nick1234.myshows",
-    version: "1.1.0",
+    version: "1.2.0",
     name: "My Shows",
-    description: "Track upcoming episodes for the shows you're watching.",
+    description: "Track upcoming episodes and add shows you're watching.",
     resources: ["catalog", "meta"],
     types: ["series"],
     catalogs: [
@@ -221,6 +221,70 @@ app.get("/catalog/series/airingthisweek.json", async (req, res) => {
 
     res.status(500).json({
       error: "Failed to load Airing This Week"
+    });
+  }
+});
+
+/*
+  TMDB TV SHOW SEARCH
+  Example:
+  /search/series.json?query=Breaking%20Bad
+*/
+app.get("/search/series.json", async (req, res) => {
+  try {
+    if (!TMDB_API_KEY) {
+      return res.status(500).json({
+        error: "TMDB_API_KEY is not configured"
+      });
+    }
+
+    const query = String(req.query.query || "").trim();
+
+    if (!query) {
+      return res.json({
+        metas: []
+      });
+    }
+
+    const response = await axios.get(
+      tmdbUrl("/search/tv"),
+      {
+        params: {
+          api_key: TMDB_API_KEY,
+          query: query,
+          language: "en-US",
+          include_adult: false
+        }
+      }
+    );
+
+    const results = response.data.results || [];
+
+    const metas = results.slice(0, 20).map((show) => {
+      return {
+        id: "tmdb:" + show.id,
+        type: "series",
+        name: show.name,
+        poster: imageUrl(show.poster_path),
+        background: imageUrl(show.backdrop_path, "w1280"),
+        description: show.overview || "",
+        releaseInfo: show.first_air_date
+          ? show.first_air_date.substring(0, 4) + "-"
+          : undefined
+      };
+    });
+
+    res.json({
+      metas: metas
+    });
+
+  } catch (error) {
+    console.error(
+      error.response ? error.response.data : error.message
+    );
+
+    res.status(500).json({
+      error: "Failed to search TV shows"
     });
   }
 });
