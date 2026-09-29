@@ -1,3 +1,4 @@
+```javascript
 const express = require("express");
 const axios = require("axios");
 
@@ -6,19 +7,18 @@ const PORT = process.env.PORT || 3000;
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 
-// We'll put the exact TMDB IDs here after verifying the 3 shows.
 const SHOWS = [
   {
     name: "The Drop: A Snowfall Saga",
-    tmdbId: null
+    tmdbId: 304842
   },
   {
     name: "MobLand",
-    tmdbId: null
+    tmdbId: 247718
   },
   {
     name: "Ana Pigeon",
-    tmdbId: null
+    tmdbId: 291350
   }
 ];
 
@@ -68,7 +68,7 @@ app.get("/catalog/series/myshows.json", async (req, res) => {
       if (!show.tmdbId) continue;
 
       const response = await axios.get(
-        `https://api.themoviedb.org/3/tv/${show.tmdbId}`,
+        `https://api.themovied.org/3/tv/${show.tmdbId}`,
         {
           params: {
             api_key: TMDB_API_KEY
@@ -105,3 +105,4 @@ app.get("/catalog/series/myshows.json", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`My Shows addon running on port ${PORT}`);
 });
+```
