@@ -384,73 +384,6 @@ const initialIds = ${JSON.stringify(initialIds)};
 let selected = [];
 
 
-async function loadExistingShows() {
-
-  if (initialIds.length === 0) {
-
-    renderSelected();
-
-    return;
-  }
-
-
-  const box =
-    document.getElementById("selectedShows");
-
-
-  box.innerHTML =
-    '<div class="message">Loading your existing shows...</div>';
-
-
-  try {
-
-    const response =
-      await fetch(
-        "/api/shows?ids=" +
-        encodeURIComponent(
-          initialIds.join(",")
-        )
-      );
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        "Could not load shows"
-      );
-
-    }
-
-
-    const data =
-      await response.json();
-
-
-    selected =
-      (data.results || []).map(
-        show => ({
-
-          id:Number(show.id),
-
-          name:show.name
-
-        })
-      );
-
-
-    renderSelected();
-
-
-  } catch (error) {
-
-    box.innerHTML =
-      '<div class="message">Could not load your existing shows. Refresh to try again.</div>';
-
-  }
-
-}
-
-
 async function searchShows() {
 
   const query =
@@ -706,6 +639,37 @@ function escapeJs(text) {
 }
 
 
+async function loadExistingShows() {
+
+  if (initialIds.length === 0) {
+    renderSelected();
+    return;
+  }
+
+  try {
+
+    const response = await fetch(
+      "/api/shows?ids=" + initialIds.join(",")
+    );
+
+    const data = await response.json();
+
+    selected = (data.results || []).map(show => ({
+      id: show.id,
+      name: show.name
+    }));
+
+    renderSelected();
+
+  } catch (error) {
+
+    renderSelected();
+
+  }
+
+}
+
+
 loadExistingShows();
 
 </script>
@@ -736,76 +700,69 @@ app.get("/api/shows", async (req, res) => {
 
     }
 
+    const ids = [...new Set(
+      String(req.query.ids || "")
+        .split(",")
+        .map(id => Number(id.trim()))
+        .filter(id => Number.isInteger(id) && id > 0)
+    )];
 
-    const ids = [
-      ...new Set(
-        String(req.query.ids || "")
-          .split(",")
-          .map(id => Number(id.trim()))
-          .filter(
-            id =>
-              Number.isInteger(id) &&
-              id > 0
-          )
-      )
-    ].slice(0, 100);
+    const results = await Promise.all(
 
+      ids.map(async id => {
 
-    const results =
-      await Promise.all(
-        ids.map(
-          async id => {
+        try {
 
-            try {
+          const show =
+            await getShowDetails(id);
 
-              const show =
-                await getShowDetails(id);
+          return {
 
+            id: show.id,
 
-              return {
+            name: show.name,
 
-                id:show.id,
+            year:
+              show.first_air_date
+                ? show.first_air_date.substring(0, 4)
+                : "",
 
-                name:show.name,
+            poster:
+              imageUrl(
+                show.poster_path
+              )
 
-                year:
-                  show.first_air_date
-                    ? show.first_air_date.substring(0,4)
-                    : "",
+          };
 
-                poster:
-                  imageUrl(
-                    show.poster_path
-                  )
+        } catch (error) {
 
-              };
+          console.error(
+            "Failed to load show " + id,
+            error.response
+              ? error.response.data
+              : error.message
+          );
 
-            } catch (error) {
+          return null;
 
-              return null;
+        }
 
-            }
+      })
 
-          }
-        )
-      );
-
+    );
 
     res.json({
-
-      results:
-        results.filter(Boolean)
-
+      results: results.filter(Boolean)
     });
-
 
   } catch (error) {
 
+    console.error(
+      error.message
+    );
+
     res.status(500).json({
-
-      error:
-        "Failed to load existing shows"
-
+      error: "Failed to load existing shows"
     });
 
   }
