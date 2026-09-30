@@ -102,6 +102,7 @@ async function getSeasonEpisodes(tmdbId, seasonNumber) {
   return response.data.episodes || [];
 }
 
+
 /*
 ====================================================
 HOME
@@ -155,7 +156,12 @@ CUSTOM CONFIGURE PAGE
 ====================================================
 */
 
-app.get("/configure", (req, res) => {
+app.get(["/configure", "/:config/configure"], (req, res) => {
+
+  const initialIds = String(req.params.config || "")
+    .split(",")
+    .map(id => Number(id.trim()))
+    .filter(id => Number.isInteger(id) && id > 0);
 
   res.send(`
 <!DOCTYPE html>
@@ -346,7 +352,7 @@ Search
   class="install"
   onclick="installAddon()"
 >
-Add My Shows to Stremio
+Update My Shows
 </button>
 
 
@@ -373,7 +379,76 @@ Open in Stremio
 
 <script>
 
+const initialIds = ${JSON.stringify(initialIds)};
+
 let selected = [];
+
+
+async function loadExistingShows() {
+
+  if (initialIds.length === 0) {
+
+    renderSelected();
+
+    return;
+  }
+
+
+  const box =
+    document.getElementById("selectedShows");
+
+
+  box.innerHTML =
+    '<div class="message">Loading your existing shows...</div>';
+
+
+  try {
+
+    const response =
+      await fetch(
+        "/api/shows?ids=" +
+        encodeURIComponent(
+          initialIds.join(",")
+        )
+      );
+
+
+    if (!response.ok) {
+
+      throw new Error(
+        "Could not load shows"
+      );
+
+    }
+
+
+    const data =
+      await response.json();
+
+
+    selected =
+      (data.results || []).map(
+        show => ({
+
+          id:Number(show.id),
+
+          name:show.name
+
+        })
+      );
+
+
+    renderSelected();
+
+
+  } catch (error) {
+
+    box.innerHTML =
+      '<div class="message">Could not load your existing shows. Refresh to try again.</div>';
+
+  }
+
+}
 
 
 async function searchShows() {
@@ -631,7 +706,7 @@ function escapeJs(text) {
 }
 
 
-renderSelected();
+loadExistingShows();
 
 </script>
 
@@ -639,6 +714,101 @@ renderSelected();
 
 </html>
   `);
+
+});
+
+
+/*
+====================================================
+LOAD EXISTING SHOWS FOR CONFIG PAGE
+====================================================
+*/
+
+app.get("/api/shows", async (req, res) => {
+
+  try {
+
+    if (!TMDB_API_KEY) {
+
+      return res.status(500).json({
+        error: "TMDB_API_KEY is not configured"
+      });
+
+    }
+
+
+    const ids = [
+      ...new Set(
+        String(req.query.ids || "")
+          .split(",")
+          .map(id => Number(id.trim()))
+          .filter(
+            id =>
+              Number.isInteger(id) &&
+              id > 0
+          )
+      )
+    ].slice(0, 100);
+
+
+    const results =
+      await Promise.all(
+        ids.map(
+          async id => {
+
+            try {
+
+              const show =
+                await getShowDetails(id);
+
+
+              return {
+
+                id:show.id,
+
+                name:show.name,
+
+                year:
+                  show.first_air_date
+                    ? show.first_air_date.substring(0,4)
+                    : "",
+
+                poster:
+                  imageUrl(
+                    show.poster_path
+                  )
+
+              };
+
+            } catch (error) {
+
+              return null;
+
+            }
+
+          }
+        )
+      );
+
+
+    res.json({
+
+      results:
+        results.filter(Boolean)
+
+    });
+
+
+  } catch (error) {
+
+    res.status(500).json({
+
+      error:
+        "Failed to load existing shows"
+
+    });
+
+  }
 
 });
 
