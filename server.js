@@ -156,12 +156,7 @@ CUSTOM CONFIGURE PAGE
 ====================================================
 */
 
-app.get(["/configure", "/:config/configure"], (req, res) => {
-
-  const initialIds = String(req.params.config || "")
-    .split(",")
-    .map(id => Number(id.trim()))
-    .filter(id => Number.isInteger(id) && id > 0);
+app.get("/configure", (req, res) => {
 
   res.send(`
 <!DOCTYPE html>
@@ -352,7 +347,7 @@ Search
   class="install"
   onclick="installAddon()"
 >
-Update My Shows
+Add My Shows to Stremio
 </button>
 
 
@@ -378,8 +373,6 @@ Open in Stremio
 
 
 <script>
-
-const initialIds = ${JSON.stringify(initialIds)};
 
 let selected = [];
 
@@ -639,38 +632,7 @@ function escapeJs(text) {
 }
 
 
-async function loadExistingShows() {
-
-  if (initialIds.length === 0) {
-    renderSelected();
-    return;
-  }
-
-  try {
-
-    const response = await fetch(
-      "/api/shows?ids=" + initialIds.join(",")
-    );
-
-    const data = await response.json();
-
-    selected = (data.results || []).map(show => ({
-      id: show.id,
-      name: show.name
-    }));
-
-    renderSelected();
-
-  } catch (error) {
-
-    renderSelected();
-
-  }
-
-}
-
-
-loadExistingShows();
+renderSelected();
 
 </script>
 
@@ -678,94 +640,6 @@ loadExistingShows();
 
 </html>
   `);
-
-});
-
-
-/*
-====================================================
-LOAD EXISTING SHOWS FOR CONFIG PAGE
-====================================================
-*/
-
-app.get("/api/shows", async (req, res) => {
-
-  try {
-
-    if (!TMDB_API_KEY) {
-
-      return res.status(500).json({
-        error: "TMDB_API_KEY is not configured"
-      });
-
-    }
-
-    const ids = [...new Set(
-      String(req.query.ids || "")
-        .split(",")
-        .map(id => Number(id.trim()))
-        .filter(id => Number.isInteger(id) && id > 0)
-    )];
-
-    const results = await Promise.all(
-
-      ids.map(async id => {
-
-        try {
-
-          const show =
-            await getShowDetails(id);
-
-          return {
-
-            id: show.id,
-
-            name: show.name,
-
-            year:
-              show.first_air_date
-                ? show.first_air_date.substring(0, 4)
-                : "",
-
-            poster:
-              imageUrl(
-                show.poster_path
-              )
-
-          };
-
-        } catch (error) {
-
-          console.error(
-            "Failed to load show " + id,
-            error.response
-              ? error.response.data
-              : error.message
-          );
-
-          return null;
-
-        }
-
-      })
-
-    );
-
-    res.json({
-      results: results.filter(Boolean)
-    });
-
-  } catch (error) {
-
-    console.error(
-      error.message
-    );
-
-    res.status(500).json({
-      error: "Failed to load existing shows"
-    });
-
-  }
 
 });
 
@@ -918,6 +792,12 @@ async function sendManifest(req, res, config) {
         type: "series",
         id: "airingthisweek",
         name: "Airing This Week"
+      },
+
+      {
+        type: "series",
+        id: "returningsoon",
+        name: "Returning Soon"
       }
 
     ]
@@ -1003,7 +883,7 @@ async function sendMyShows(req, res, config) {
           next.name +
           " • " +
           formatDate(next.air_date) +
-          "\\n\\n" +
+          "\n\n" +
           description;
 
       }
@@ -1164,7 +1044,7 @@ async function sendAiringThisWeek(
             formatDate(
               next.air_date
             ) +
-            "\\n\\n" +
+            "\n\n" +
             "Season " +
             next.season_number +
             ", Episode " +
@@ -1221,6 +1101,168 @@ app.get(
   async (req,res) => {
 
     await sendAiringThisWeek(
+      req,
+      res,
+      req.params.config
+    );
+
+  }
+);
+
+
+/*
+====================================================
+RETURNING SOON
+====================================================
+*/
+
+function isReturningSoon(dateString) {
+
+  if (!dateString) return false;
+
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+
+  const target = new Date(
+    dateString + "T00:00:00Z"
+  );
+
+  const sevenDays = new Date(today);
+  sevenDays.setUTCDate(
+    sevenDays.getUTCDate() + 7
+  );
+
+  return target > sevenDays;
+
+}
+
+
+async function sendReturningSoon(
+  req,
+  res,
+  config
+) {
+
+  try {
+
+    if (!TMDB_API_KEY) {
+
+      return res.status(500).json({
+        error:"TMDB_API_KEY is not configured"
+      });
+
+    }
+
+
+    const shows =
+      getShowsFromConfig(config);
+
+
+    const metas = [];
+
+
+    for (const show of shows) {
+
+      const data =
+        await getShowDetails(
+          show.tmdbId
+        );
+
+
+      if (
+        data.next_episode_to_air &&
+        isReturningSoon(
+          data.next_episode_to_air.air_date
+        )
+      ) {
+
+        const next =
+          data.next_episode_to_air;
+
+
+        metas.push({
+
+          id:
+            "tmdb:" +
+            data.id,
+
+          type:"series",
+
+          name:data.name,
+
+          poster:
+            imageUrl(
+              data.poster_path
+            ),
+
+          background:
+            imageUrl(
+              data.backdrop_path,
+              "w1280"
+            ),
+
+          description:
+            "🔜 Returns " +
+            formatDate(
+              next.air_date
+            ) +
+            "\n\n" +
+            "Season " +
+            next.season_number +
+            ", Episode " +
+            next.episode_number +
+            ": " +
+            next.name
+
+        });
+
+      }
+
+    }
+
+
+    res.json({
+      metas: metas
+    });
+
+
+  } catch(error) {
+
+    console.error(
+      error.response
+        ? error.response.data
+        : error.message
+    );
+
+
+    res.status(500).json({
+      error:"Failed to load Returning Soon"
+    });
+
+  }
+
+}
+
+
+app.get(
+  "/catalog/series/returningsoon.json",
+  async (req,res) => {
+
+    await sendReturningSoon(
+      req,
+      res,
+      null
+    );
+
+  }
+);
+
+
+app.get(
+  "/:config/catalog/series/returningsoon.json",
+  async (req,res) => {
+
+    await sendReturningSoon(
       req,
       res,
       req.params.config
