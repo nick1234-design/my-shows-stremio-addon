@@ -102,7 +102,6 @@ async function getSeasonEpisodes(tmdbId, seasonNumber) {
   return response.data.episodes || [];
 }
 
-
 /*
 ====================================================
 HOME
@@ -156,7 +155,34 @@ CUSTOM CONFIGURE PAGE
 ====================================================
 */
 
-app.get("/configure", (req, res) => {
+async function sendConfigure(req, res, config) {
+
+  const initialShows = [];
+
+  if (config) {
+    const ids = config
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => /^\d+$/.test(id));
+
+    for (const id of ids) {
+      try {
+        const data = await getShowDetails(Number(id));
+
+        initialShows.push({
+          id: data.id,
+          name: data.name
+        });
+
+      } catch (error) {
+
+        console.error(
+          "Failed to load configured show " + id
+        );
+
+      }
+    }
+  }
 
   res.send(`
 <!DOCTYPE html>
@@ -374,7 +400,7 @@ Open in Stremio
 
 <script>
 
-let selected = [];
+let selected = ${JSON.stringify(initialShows)};
 
 
 async function searchShows() {
@@ -640,6 +666,26 @@ renderSelected();
 
 </html>
   `);
+
+}
+
+app.get("/configure", async (req, res) => {
+
+  await sendConfigure(
+    req,
+    res,
+    null
+  );
+
+});
+
+app.get("/:config/configure", async (req, res) => {
+
+  await sendConfigure(
+    req,
+    res,
+    req.params.config
+  );
 
 });
 
