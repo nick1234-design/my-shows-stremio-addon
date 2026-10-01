@@ -759,7 +759,7 @@ async function sendManifest(req, res, config) {
 
     id: "com.nick1234.myshows",
 
-    version: "2.0.0",
+    version: "2.0.1",
 
     name: "My Shows",
 
