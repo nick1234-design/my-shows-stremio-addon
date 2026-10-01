@@ -102,7 +102,6 @@ async function getSeasonEpisodes(tmdbId, seasonNumber) {
   return response.data.episodes || [];
 }
 
-
 /*
 ====================================================
 HOME
@@ -792,12 +791,6 @@ async function sendManifest(req, res, config) {
         type: "series",
         id: "airingthisweek",
         name: "Airing This Week"
-      },
-
-      {
-        type: "series",
-        id: "returningsoon",
-        name: "Returning Soon"
       }
 
     ]
@@ -883,7 +876,7 @@ async function sendMyShows(req, res, config) {
           next.name +
           " • " +
           formatDate(next.air_date) +
-          "\n\n" +
+          " — " +
           description;
 
       }
@@ -1044,7 +1037,7 @@ async function sendAiringThisWeek(
             formatDate(
               next.air_date
             ) +
-            "\n\n" +
+            " — " +
             "Season " +
             next.season_number +
             ", Episode " +
@@ -1101,168 +1094,6 @@ app.get(
   async (req,res) => {
 
     await sendAiringThisWeek(
-      req,
-      res,
-      req.params.config
-    );
-
-  }
-);
-
-
-/*
-====================================================
-RETURNING SOON
-====================================================
-*/
-
-function isReturningSoon(dateString) {
-
-  if (!dateString) return false;
-
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
-
-  const target = new Date(
-    dateString + "T00:00:00Z"
-  );
-
-  const sevenDays = new Date(today);
-  sevenDays.setUTCDate(
-    sevenDays.getUTCDate() + 7
-  );
-
-  return target > sevenDays;
-
-}
-
-
-async function sendReturningSoon(
-  req,
-  res,
-  config
-) {
-
-  try {
-
-    if (!TMDB_API_KEY) {
-
-      return res.status(500).json({
-        error:"TMDB_API_KEY is not configured"
-      });
-
-    }
-
-
-    const shows =
-      getShowsFromConfig(config);
-
-
-    const metas = [];
-
-
-    for (const show of shows) {
-
-      const data =
-        await getShowDetails(
-          show.tmdbId
-        );
-
-
-      if (
-        data.next_episode_to_air &&
-        isReturningSoon(
-          data.next_episode_to_air.air_date
-        )
-      ) {
-
-        const next =
-          data.next_episode_to_air;
-
-
-        metas.push({
-
-          id:
-            "tmdb:" +
-            data.id,
-
-          type:"series",
-
-          name:data.name,
-
-          poster:
-            imageUrl(
-              data.poster_path
-            ),
-
-          background:
-            imageUrl(
-              data.backdrop_path,
-              "w1280"
-            ),
-
-          description:
-            "🔜 Returns " +
-            formatDate(
-              next.air_date
-            ) +
-            "\n\n" +
-            "Season " +
-            next.season_number +
-            ", Episode " +
-            next.episode_number +
-            ": " +
-            next.name
-
-        });
-
-      }
-
-    }
-
-
-    res.json({
-      metas: metas
-    });
-
-
-  } catch(error) {
-
-    console.error(
-      error.response
-        ? error.response.data
-        : error.message
-    );
-
-
-    res.status(500).json({
-      error:"Failed to load Returning Soon"
-    });
-
-  }
-
-}
-
-
-app.get(
-  "/catalog/series/returningsoon.json",
-  async (req,res) => {
-
-    await sendReturningSoon(
-      req,
-      res,
-      null
-    );
-
-  }
-);
-
-
-app.get(
-  "/:config/catalog/series/returningsoon.json",
-  async (req,res) => {
-
-    await sendReturningSoon(
       req,
       res,
       req.params.config
