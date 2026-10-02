@@ -21,17 +21,14 @@ const DEFAULT_SHOWS = [
   }
 ];
 
-
 function tmdbUrl(path) {
   return "https://api.themoviedb.org/3" + path;
 }
-
 
 function imageUrl(path, size = "w500") {
   if (!path) return undefined;
   return "https://image.tmdb.org/t/p/" + size + path;
 }
-
 
 function formatDate(dateString) {
   if (!dateString) return null;
@@ -46,7 +43,6 @@ function formatDate(dateString) {
   });
 }
 
-
 function isWithinNext7Days(dateString) {
   if (!dateString) return false;
 
@@ -60,7 +56,6 @@ function isWithinNext7Days(dateString) {
 
   return target >= today && target <= sevenDays;
 }
-
 
 function getShowsFromConfig(config) {
   if (!config) {
@@ -81,7 +76,6 @@ function getShowsFromConfig(config) {
   }));
 }
 
-
 async function getShowDetails(tmdbId) {
   const response = await axios.get(
     tmdbUrl("/tv/" + tmdbId),
@@ -94,7 +88,6 @@ async function getShowDetails(tmdbId) {
 
   return response.data;
 }
-
 
 async function getSeasonEpisodes(tmdbId, seasonNumber) {
   const response = await axios.get(
@@ -175,7 +168,6 @@ async function sendConfigure(req, res, config) {
 
     for (const id of ids) {
       try {
-
         const data = await getShowDetails(Number(id));
 
         initialShows.push({
@@ -192,7 +184,6 @@ async function sendConfigure(req, res, config) {
       }
     }
   }
-
 
   res.send(`
 <!DOCTYPE html>
@@ -679,7 +670,6 @@ renderSelected();
 
 }
 
-
 app.get("/configure", async (req, res) => {
 
   await sendConfigure(
@@ -689,7 +679,6 @@ app.get("/configure", async (req, res) => {
   );
 
 });
-
 
 app.get("/:config/configure", async (req, res) => {
 
@@ -818,7 +807,7 @@ async function sendManifest(req, res, config) {
 
     id: "com.nick1234.myshows",
 
-    version: "2.0.1",
+    version: "2.1.0",
 
     name: "My Shows",
 
@@ -850,6 +839,12 @@ async function sendManifest(req, res, config) {
         type: "series",
         id: "airingthisweek",
         name: "Airing This Week"
+      },
+
+      {
+        type: "series",
+        id: "whatsnext",
+        name: "What's Next?"
       }
 
     ]
@@ -859,7 +854,7 @@ async function sendManifest(req, res, config) {
 }
 
 
-app.get("/manifest.json", async (req,res) => {
+app.get("/manifest.json", async (req,res) {
 
   await sendManifest(
     req,
@@ -868,556 +863,3 @@ app.get("/manifest.json", async (req,res) => {
   );
 
 });
-
-
-app.get("/:config/manifest.json", async (req,res) => {
-
-  await sendManifest(
-    req,
-    res,
-    req.params.config
-  );
-
-});
-
-
-/*
-====================================================
-CATALOG
-====================================================
-*/
-
-async function sendMyShows(req, res, config) {
-
-  try {
-
-    if (!TMDB_API_KEY) {
-
-      return res.status(500).json({
-        error: "TMDB_API_KEY is not configured"
-      });
-
-    }
-
-
-    const shows =
-      getShowsFromConfig(config);
-
-
-    const metas = [];
-
-
-    for (const show of shows) {
-
-      const data =
-        await getShowDetails(
-          show.tmdbId
-        );
-
-
-      let description =
-        data.overview || "";
-
-
-      if (data.next_episode_to_air) {
-
-        const next =
-          data.next_episode_to_air;
-
-
-        description =
-          "Next episode: " +
-          "S" +
-          next.season_number +
-          " E" +
-          next.episode_number +
-          " - " +
-          next.name +
-          " • " +
-          formatDate(next.air_date) +
-          " — " +
-          description;
-
-      }
-
-
-      metas.push({
-
-        id:
-          "tmdb:" +
-          data.id,
-
-        type:"series",
-
-        name:data.name,
-
-        poster:
-          imageUrl(
-            data.poster_path
-          ),
-
-        background:
-          imageUrl(
-            data.backdrop_path,
-            "w1280"
-          ),
-
-        description:
-          description
-
-      });
-
-    }
-
-
-    res.json({
-      metas: metas
-    });
-
-
-  } catch(error) {
-
-    console.error(
-      error.response
-        ? error.response.data
-        : error.message
-    );
-
-
-    res.status(500).json({
-      error:"Failed to load My Shows"
-    });
-
-  }
-
-}
-
-
-app.get(
-  "/catalog/series/myshows.json",
-  async (req,res) => {
-
-    await sendMyShows(
-      req,
-      res,
-      null
-    );
-
-  }
-);
-
-
-app.get(
-  "/:config/catalog/series/myshows.json",
-  async (req,res) => {
-
-    await sendMyShows(
-      req,
-      res,
-      req.params.config
-    );
-
-  }
-);
-
-
-/*
-====================================================
-AIRING THIS WEEK
-====================================================
-*/
-
-async function sendAiringThisWeek(
-  req,
-  res,
-  config
-) {
-
-  try {
-
-    if (!TMDB_API_KEY) {
-
-      return res.status(500).json({
-        error:"TMDB_API_KEY is not configured"
-      });
-
-    }
-
-
-    const shows =
-      getShowsFromConfig(config);
-
-
-    const metas = [];
-
-
-    for (const show of shows) {
-
-      const data =
-        await getShowDetails(
-          show.tmdbId
-        );
-
-
-      if (
-        data.next_episode_to_air &&
-        isWithinNext7Days(
-          data.next_episode_to_air.air_date
-        )
-      ) {
-
-        const next =
-          data.next_episode_to_air;
-
-
-        metas.push({
-
-          id:
-            "tmdb:" +
-            data.id,
-
-          type:"series",
-
-          name:data.name,
-
-          poster:
-            imageUrl(
-              data.poster_path
-            ),
-
-          background:
-            imageUrl(
-              data.backdrop_path,
-              "w1280"
-            ),
-
-          description:
-            "🔥 Airs " +
-            formatDate(
-              next.air_date
-            ) +
-            " — " +
-            "Season " +
-            next.season_number +
-            ", Episode " +
-            next.episode_number +
-            ": " +
-            next.name
-
-        });
-
-      }
-
-    }
-
-
-    res.json({
-      metas: metas
-    });
-
-
-  } catch(error) {
-
-    console.error(
-      error.response
-        ? error.response.data
-        : error.message
-    );
-
-
-    res.status(500).json({
-      error:"Failed to load Airing This Week"
-    });
-
-  }
-
-}
-
-
-app.get(
-  "/catalog/series/airingthisweek.json",
-  async (req,res) => {
-
-    await sendAiringThisWeek(
-      req,
-      res,
-      null
-    );
-
-  }
-);
-
-
-app.get(
-  "/:config/catalog/series/airingthisweek.json",
-  async (req,res) => {
-
-    await sendAiringThisWeek(
-      req,
-      res,
-      req.params.config
-    );
-
-  }
-);
-
-
-/*
-====================================================
-META
-====================================================
-*/
-
-async function sendMeta(
-  req,
-  res
-) {
-
-  try {
-
-    if (!TMDB_API_KEY) {
-
-      return res.status(500).json({
-        error:"TMDB_API_KEY is not configured"
-      });
-
-    }
-
-
-    const id =
-      req.params.id;
-
-
-    if (
-      !id.startsWith("tmdb:")
-    ) {
-
-      return res.status(404).json({
-        error:"Unknown show ID"
-      });
-
-    }
-
-
-    const tmdbId =
-      id.replace(
-        "tmdb:",
-        ""
-      );
-
-
-    const data =
-      await getShowDetails(
-        tmdbId
-      );
-
-
-    /*
-    ====================================================
-    LOAD ALL SEASONS AND EPISODES
-    ====================================================
-    */
-
-    let episodes = [];
-
-    const seasons =
-      (data.seasons || [])
-        .filter(
-          season =>
-            season.season_number > 0
-        )
-        .sort(
-          (a, b) =>
-            a.season_number -
-            b.season_number
-        );
-
-
-    for (const season of seasons) {
-
-      try {
-
-        const seasonEpisodes =
-          await getSeasonEpisodes(
-            tmdbId,
-            season.season_number
-          );
-
-        episodes =
-          episodes.concat(
-            seasonEpisodes
-          );
-
-      } catch (error) {
-
-        console.error(
-          "Failed to load season " +
-          season.season_number +
-          " for TMDB " +
-          tmdbId,
-          error.response
-            ? error.response.data
-            : error.message
-        );
-
-      }
-
-    }
-
-
-    const videos =
-      episodes.map(
-        episode => {
-
-          return {
-
-            id:
-              "tmdb:" +
-              tmdbId +
-              ":" +
-              episode.season_number +
-              ":" +
-              episode.episode_number,
-
-            title:
-              "S" +
-              episode.season_number +
-              " E" +
-              episode.episode_number +
-              " - " +
-              episode.name,
-
-            released:
-              episode.air_date
-                ? episode.air_date +
-                  "T12:00:00.000Z"
-                : new Date().toISOString(),
-
-            thumbnail:
-              imageUrl(
-                episode.still_path,
-                "w300"
-              ),
-
-            season:
-              episode.season_number,
-
-            episode:
-              episode.episode_number,
-
-            overview:
-              episode.overview || ""
-
-          };
-
-        }
-      );
-
-
-    res.json({
-
-      meta: {
-
-        id:
-          "tmdb:" +
-          data.id,
-
-        type:"series",
-
-        name:
-          data.name,
-
-        poster:
-          imageUrl(
-            data.poster_path
-          ),
-
-        background:
-          imageUrl(
-            data.backdrop_path,
-            "w1280"
-          ),
-
-        description:
-          data.overview || "",
-
-        releaseInfo:
-          data.first_air_date
-            ? data.first_air_date.substring(0,4) + "-"
-            : undefined,
-
-        videos:
-          videos
-
-      }
-
-    });
-
-
-  } catch(error) {
-
-    console.error(
-      error.response
-        ? error.response.data
-        : error.message
-    );
-
-
-    res.status(500).json({
-      error:"Failed to load show metadata"
-    });
-
-  }
-
-}
-
-
-/*
-====================================================
-META ROUTES
-====================================================
-*/
-
-app.get(
-  "/meta/series/:id.json",
-  async (req,res) => {
-
-    await sendMeta(
-      req,
-      res
-    );
-
-  }
-);
-
-
-app.get(
-  "/:config/meta/series/:id.json",
-  async (req,res) => {
-
-    await sendMeta(
-      req,
-      res
-    );
-
-  }
-);
-
-
-/*
-====================================================
-START
-====================================================
-*/
-
-app.listen(
-  PORT,
-  () => {
-
-    console.log(
-      "My Shows addon running on port " +
-      PORT
-    );
-
-  }
-);
