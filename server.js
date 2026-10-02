@@ -58,6 +58,7 @@ function isWithinNext7Days(dateString) {
 }
 
 const DEFAULT_ROWS = ["myshows", "whatsnext"];
+
 const ALL_ROWS = [
   "myshows",
   "whatsnext",
@@ -75,27 +76,35 @@ function getRowsFromConfig(config) {
     return DEFAULT_ROWS;
   }
 
-  const rowPart = String(config).split("~")[1] || "";
+  const rowPart =
+    String(config).split("~")[1] || "";
 
-  const rows = rowPart
-    .split(",")
-    .map(row => row.trim())
-    .filter(row => ALL_ROWS.includes(row));
+  const rows =
+    rowPart
+      .split(",")
+      .map(row => row.trim())
+      .filter(row => ALL_ROWS.includes(row));
 
-  return rows.length > 0 ? rows : DEFAULT_ROWS;
+  return rows.length > 0
+    ? rows
+    : DEFAULT_ROWS;
 }
 
 function getShowsFromConfig(config) {
   if (!config) return DEFAULT_SHOWS;
 
-  const showPart = getShowPartFromConfig(config);
+  const showPart =
+    getShowPartFromConfig(config);
 
-  const ids = showPart
-    .split(",")
-    .map(id => id.trim())
-    .filter(id => /^\d+$/.test(id));
+  const ids =
+    showPart
+      .split(",")
+      .map(id => id.trim())
+      .filter(id => /^\d+$/.test(id));
 
-  if (ids.length === 0) return DEFAULT_SHOWS;
+  if (ids.length === 0) {
+    return DEFAULT_SHOWS;
+  }
 
   return ids.map(id => ({
     tmdbId: Number(id)
@@ -103,27 +112,37 @@ function getShowsFromConfig(config) {
 }
 
 async function getShowDetails(tmdbId) {
-  const response = await axios.get(
-    tmdbUrl("/tv/" + tmdbId),
-    {
-      params: {
-        api_key: TMDB_API_KEY
+  const response =
+    await axios.get(
+      tmdbUrl("/tv/" + tmdbId),
+      {
+        params: {
+          api_key: TMDB_API_KEY
+        }
       }
-    }
-  );
+    );
 
   return response.data;
 }
 
-async function getSeasonEpisodes(tmdbId, seasonNumber) {
-  const response = await axios.get(
-    tmdbUrl("/tv/" + tmdbId + "/season/" + seasonNumber),
-    {
-      params: {
-        api_key: TMDB_API_KEY
+async function getSeasonEpisodes(
+  tmdbId,
+  seasonNumber
+) {
+  const response =
+    await axios.get(
+      tmdbUrl(
+        "/tv/" +
+        tmdbId +
+        "/season/" +
+        seasonNumber
+      ),
+      {
+        params: {
+          api_key: TMDB_API_KEY
+        }
       }
-    }
-  );
+    );
 
   return response.data.episodes || [];
 }
@@ -140,7 +159,10 @@ app.get("/", (req, res) => {
     <html>
       <head>
         <title>My Shows</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1"
+        >
       </head>
 
       <body style="
@@ -153,7 +175,9 @@ app.get("/", (req, res) => {
 
         <h1>📺 My Shows</h1>
 
-        <p>Track your favorite TV shows in Stremio.</p>
+        <p>
+          Track your favorite TV shows in Stremio.
+        </p>
 
         <a
           href="/configure"
@@ -182,21 +206,255 @@ CUSTOM CONFIGURE PAGE
 ====================================================
 */
 
-async function sendConfigure(req, res, config) {
-  const configString = String(config || "");
+async function sendConfigure(
+  req,
+  res,
+  config
+) {
 
-  const initialIds = getShowPartFromConfig(configString)
-    .split(",")
-    .map(id => Number(id.trim()))
-    .filter(id => Number.isInteger(id) && id > 0);
+  const configString =
+    String(config || "");
 
-  const initialRows = getRowsFromConfig(configString);
+  const initialIds =
+    getShowPartFromConfig(
+      configString
+    )
+      .split(",")
+      .map(id => Number(id.trim()))
+      .filter(
+        id =>
+          Number.isInteger(id) &&
+          id > 0
+      );
+
+  const initialRows =
+    getRowsFromConfig(
+      configString
+    );
 
   res.send(`
-<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Configure My Shows</title>
+<!DOCTYPE html>
+<html>
+<head>
+
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1"
+>
+
+<title>Configure My Shows</title>
+
 <style>
-body{margin:0;background:#101010;color:white;font-family:Arial,sans-serif}.container{max-width:700px;margin:auto;padding:25px}h1{text-align:center}.subtitle{text-align:center;color:#aaa}.searchBox{display:flex;gap:10px;margin-top:25px}input[type="text"]{flex:1;padding:14px;border-radius:8px;border:1px solid #444;background:#202020;color:white;font-size:16px}button{border:0;border-radius:8px;padding:12px 18px;background:#7c4dff;color:white;font-weight:bold;cursor:pointer}button.remove{background:#444}.results{margin-top:20px}.show{display:flex;align-items:center;gap:15px;background:#1c1c1c;padding:12px;border-radius:10px;margin-bottom:10px}.show img{width:65px;height:95px;object-fit:cover;border-radius:6px}.showInfo{flex:1}.showTitle{font-size:17px;font-weight:bold}.year{color:#aaa;margin-top:5px}.selected{margin-top:30px}.selectedItem{display:flex;align-items:center;justify-content:space-between;background:#1c1c1c;padding:12px;border-radius:8px;margin-bottom:8px}.rows{margin-top:30px}.rowCard{display:flex;align-items:center;justify-content:space-between;gap:15px;background:#1c1c1c;padding:15px;border-radius:10px;margin-bottom:10px}.rowInfo{flex:1}.rowTitle{font-size:16px;font-weight:bold}.rowDescription{color:#999;font-size:13px;margin-top:5px}.switch{position:relative;width:52px;height:30px;flex:none}.switch input{opacity:0;width:0;height:0}.slider{position:absolute;inset:0;background:#444;border-radius:30px;transition:.2s;cursor:pointer}.slider:before{content:"";position:absolute;width:22px;height:22px;left:4px;top:4px;background:white;border-radius:50%;transition:.2s}.switch input:checked+.slider{background:#7c4dff}.switch input:checked+.slider:before{transform:translateX(22px)}.install{width:100%;margin-top:25px;padding:16px;font-size:17px;background:#00a86b}.installBox{margin-top:20px;background:#191919;padding:15px;border-radius:10px;display:none}.installUrl{word-break:break-all;color:#aaa;font-size:13px;margin-top:10px}.message{text-align:center;color:#aaa;margin-top:20px}
-</style></head><body><div class="container">
+
+body{
+  margin:0;
+  background:#101010;
+  color:white;
+  font-family:Arial,sans-serif
+}
+
+.container{
+  max-width:700px;
+  margin:auto;
+  padding:25px
+}
+
+h1{
+  text-align:center
+}
+
+.subtitle{
+  text-align:center;
+  color:#aaa
+}
+
+.searchBox{
+  display:flex;
+  gap:10px;
+  margin-top:25px
+}
+
+input[type="text"]{
+  flex:1;
+  padding:14px;
+  border-radius:8px;
+  border:1px solid #444;
+  background:#202020;
+  color:white;
+  font-size:16px
+}
+
+button{
+  border:0;
+  border-radius:8px;
+  padding:12px 18px;
+  background:#7c4dff;
+  color:white;
+  font-weight:bold;
+  cursor:pointer
+}
+
+button.remove{
+  background:#444
+}
+
+.results{
+  margin-top:20px
+}
+
+.show{
+  display:flex;
+  align-items:center;
+  gap:15px;
+  background:#1c1c1c;
+  padding:12px;
+  border-radius:10px;
+  margin-bottom:10px
+}
+
+.show img{
+  width:65px;
+  height:95px;
+  object-fit:cover;
+  border-radius:6px
+}
+
+.showInfo{
+  flex:1
+}
+
+.showTitle{
+  font-size:17px;
+  font-weight:bold
+}
+
+.year{
+  color:#aaa;
+  margin-top:5px
+}
+
+.selected{
+  margin-top:30px
+}
+
+.selectedItem{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  background:#1c1c1c;
+  padding:12px;
+  border-radius:8px;
+  margin-bottom:8px
+}
+
+.rows{
+  margin-top:30px
+}
+
+.rowCard{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:15px;
+  background:#1c1c1c;
+  padding:15px;
+  border-radius:10px;
+  margin-bottom:10px
+}
+
+.rowInfo{
+  flex:1
+}
+
+.rowTitle{
+  font-size:16px;
+  font-weight:bold
+}
+
+.rowDescription{
+  color:#999;
+  font-size:13px;
+  margin-top:5px
+}
+
+.switch{
+  position:relative;
+  width:52px;
+  height:30px;
+  flex:none
+}
+
+.switch input{
+  opacity:0;
+  width:0;
+  height:0
+}
+
+.slider{
+  position:absolute;
+  inset:0;
+  background:#444;
+  border-radius:30px;
+  transition:.2s;
+  cursor:pointer
+}
+
+.slider:before{
+  content:"";
+  position:absolute;
+  width:22px;
+  height:22px;
+  left:4px;
+  top:4px;
+  background:white;
+  border-radius:50%;
+  transition:.2s
+}
+
+.switch input:checked+.slider{
+  background:#7c4dff
+}
+
+.switch input:checked+.slider:before{
+  transform:translateX(22px)
+}
+
+.install{
+  width:100%;
+  margin-top:25px;
+  padding:16px;
+  font-size:17px;
+  background:#00a86b
+}
+
+.installBox{
+  margin-top:20px;
+  background:#191919;
+  padding:15px;
+  border-radius:10px;
+  display:none
+}
+
+.installUrl{
+  word-break:break-all;
+  color:#aaa;
+  font-size:13px;
+  margin-top:10px
+}
+
+.message{
+  text-align:center;
+  color:#aaa;
+  margin-top:20px
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
 
 <h1>📺 My Shows</h1>
 
@@ -205,103 +463,192 @@ Choose your shows and decide which Home rows you want to see.
 </p>
 
 <div class="searchBox">
-  <input type="text" id="search" placeholder="Search for a TV show...">
-  <button onclick="searchShows()">Search</button>
+
+<input
+  type="text"
+  id="search"
+  placeholder="Search for a TV show..."
+>
+
+<button onclick="searchShows()">
+Search
+</button>
+
 </div>
 
-<div id="results" class="results"></div>
+<div
+  id="results"
+  class="results"
+></div>
 
 <div class="selected">
-  <h2>My Shows</h2>
-  <div id="selectedShows"></div>
+
+<h2>My Shows</h2>
+
+<div id="selectedShows"></div>
+
 </div>
 
 <div class="rows">
-  <h2>Home Rows</h2>
 
-  <div class="rowCard">
-    <div class="rowInfo">
-      <div class="rowTitle">My Shows</div>
-      <div class="rowDescription">
-        Your personal show collection.
-      </div>
-    </div>
+<h2>Home Rows</h2>
 
-    <label class="switch">
-      <input type="checkbox" id="row_myshows">
-      <span class="slider"></span>
-    </label>
-  </div>
+<div class="rowCard">
 
-  <div class="rowCard">
-    <div class="rowInfo">
-      <div class="rowTitle">What's Next?</div>
-      <div class="rowDescription">
-        Shows with an upcoming episode.
-      </div>
-    </div>
+<div class="rowInfo">
 
-    <label class="switch">
-      <input type="checkbox" id="row_whatsnext">
-      <span class="slider"></span>
-    </label>
-  </div>
+<div class="rowTitle">
+My Shows
+</div>
 
-  <div class="rowCard">
-    <div class="rowInfo">
-      <div class="rowTitle">Airing This Week</div>
-      <div class="rowDescription">
-        Shows airing within the next 7 days.
-      </div>
-    </div>
-
-    <label class="switch">
-      <input type="checkbox" id="row_airingthisweek">
-      <span class="slider"></span>
-    </label>
-  </div>
-
-  <div class="rowCard">
-    <div class="rowInfo">
-      <div class="rowTitle">Returning Soon</div>
-      <div class="rowDescription">
-        Shows returning more than 7 days from now.
-      </div>
-    </div>
-
-    <label class="switch">
-      <input type="checkbox" id="row_returningsoon">
-      <span class="slider"></span>
-    </label>
-  </div>
+<div class="rowDescription">
+Your personal show collection.
+</div>
 
 </div>
 
-<button class="install" onclick="installAddon()">
-  Update My Shows
+<label class="switch">
+
+<input
+  type="checkbox"
+  id="row_myshows"
+>
+
+<span class="slider"></span>
+
+</label>
+
+</div>
+
+
+<div class="rowCard">
+
+<div class="rowInfo">
+
+<div class="rowTitle">
+What's Next?
+</div>
+
+<div class="rowDescription">
+Shows with an upcoming episode.
+</div>
+
+</div>
+
+<label class="switch">
+
+<input
+  type="checkbox"
+  id="row_whatsnext"
+>
+
+<span class="slider"></span>
+
+</label>
+
+</div>
+
+
+<div class="rowCard">
+
+<div class="rowInfo">
+
+<div class="rowTitle">
+Airing This Week
+</div>
+
+<div class="rowDescription">
+Shows airing within the next 7 days.
+</div>
+
+</div>
+
+<label class="switch">
+
+<input
+  type="checkbox"
+  id="row_airingthisweek"
+>
+
+<span class="slider"></span>
+
+</label>
+
+</div>
+
+
+<div class="rowCard">
+
+<div class="rowInfo">
+
+<div class="rowTitle">
+Returning Soon
+</div>
+
+<div class="rowDescription">
+Shows returning more than 7 days from now.
+</div>
+
+</div>
+
+<label class="switch">
+
+<input
+  type="checkbox"
+  id="row_returningsoon"
+>
+
+<span class="slider"></span>
+
+</label>
+
+</div>
+
+</div>
+
+
+<button
+  class="install"
+  onclick="installAddon()"
+>
+Update My Shows
 </button>
 
-<div id="installBox" class="installBox">
-  <strong>Your personalized addon:</strong>
 
-  <div id="installUrl" class="installUrl"></div>
+<div
+  id="installBox"
+  class="installBox"
+>
 
-  <br>
+<strong>
+Your personalized addon:
+</strong>
 
-  <button onclick="openStremio()">
-    Open in Stremio
-  </button>
+<div
+  id="installUrl"
+  class="installUrl"
+></div>
+
+<br>
+
+<button onclick="openStremio()">
+Open in Stremio
+</button>
+
 </div>
 
 </div>
+
 
 <script>
 
-const initialIds=${JSON.stringify(initialIds)};
+const initialIds =
+  ${JSON.stringify(initialIds)};
 
-const initialRows=${JSON.stringify(initialRows)};
+const initialRows =
+  ${JSON.stringify(initialRows)};
 
-let selected=[];
+let selected = [];
 
 
 function applyInitialRows(){
@@ -314,7 +661,7 @@ function applyInitialRows(){
   ].forEach(row => {
 
     document.getElementById(
-      "row_"+row
+      "row_" + row
     ).checked =
       initialRows.includes(row);
 
@@ -326,12 +673,17 @@ function applyInitialRows(){
 async function searchShows(){
 
   const query =
-    document.getElementById("search").value.trim();
+    document
+      .getElementById("search")
+      .value
+      .trim();
 
-  if(!query)return;
+  if(!query) return;
 
   const results =
-    document.getElementById("results");
+    document.getElementById(
+      "results"
+    );
 
   results.innerHTML =
     '<div class="message">Searching...</div>';
@@ -340,7 +692,7 @@ async function searchShows(){
 
     const response =
       await fetch(
-        "/api/search?query="+
+        "/api/search?query=" +
         encodeURIComponent(query)
       );
 
@@ -349,55 +701,63 @@ async function searchShows(){
 
     if(
       !data.results ||
-      data.results.length===0
+      data.results.length === 0
     ){
 
       results.innerHTML =
         '<div class="message">No shows found.</div>';
 
       return;
+
     }
 
+
     results.innerHTML =
-      data.results.map(show => {
+      data.results
+        .map(show => {
 
-        const poster =
-          show.poster ||
-          "https://via.placeholder.com/65x95?text=No+Poster";
+          const poster =
+            show.poster ||
+            "https://via.placeholder.com/65x95?text=No+Poster";
 
-        const alreadyAdded =
-          selected.some(
-            item => item.id===show.id
-          );
+          const alreadyAdded =
+            selected.some(
+              item =>
+                item.id === show.id
+            );
 
-        return \`
-          <div class="show">
+          return \`
+            <div class="show">
 
-            <img src="\${poster}">
+              <img src="\${poster}">
 
-            <div class="showInfo">
+              <div class="showInfo">
 
-              <div class="showTitle">
-                \${escapeHtml(show.name)}
+                <div class="showTitle">
+                  \${escapeHtml(show.name)}
+                </div>
+
+                <div class="year">
+                  \${show.year || ""}
+                </div>
+
               </div>
 
-              <div class="year">
-                \${show.year||""}
-              </div>
+              <button
+                onclick="addShow(
+                  \${show.id},
+                  '\${escapeJs(show.name)}'
+                )"
+                \${alreadyAdded ? "disabled" : ""}
+              >
+                \${alreadyAdded ? "Added" : "Add"}
+              </button>
 
             </div>
+          \`;
 
-            <button
-              onclick="addShow(\${show.id}, '\${escapeJs(show.name)}')"
-              \${alreadyAdded?"disabled":""}
-            >
-              \${alreadyAdded?"Added":"Add"}
-            </button>
-
-          </div>
-        \`;
-
-      }).join("");
+        })
+        .join("");
 
   }catch(error){
 
@@ -413,9 +773,9 @@ function addShow(id,name){
 
   if(
     selected.some(
-      show => show.id===id
+      show => show.id === id
     )
-  )return;
+  ) return;
 
   selected.push({
     id:id,
@@ -433,7 +793,7 @@ function removeShow(id){
 
   selected =
     selected.filter(
-      show => show.id!==id
+      show => show.id !== id
     );
 
   renderSelected();
@@ -450,7 +810,7 @@ function renderSelected(){
       "selectedShows"
     );
 
-  if(selected.length===0){
+  if(selected.length === 0){
 
     box.innerHTML =
       '<div class="message">No shows added yet.</div>';
@@ -460,29 +820,33 @@ function renderSelected(){
   }
 
   box.innerHTML =
-    selected.map(show => \`
-      <div class="selectedItem">
+    selected
+      .map(show => \`
 
-        <span>
-          \${escapeHtml(show.name)}
-        </span>
+        <div class="selectedItem">
 
-        <button
-          class="remove"
-          onclick="removeShow(\${show.id})"
-        >
-          Remove
-        </button>
+          <span>
+            \${escapeHtml(show.name)}
+          </span>
 
-      </div>
-    \`).join("");
+          <button
+            class="remove"
+            onclick="removeShow(\${show.id})"
+          >
+            Remove
+          </button>
+
+        </div>
+
+      \`)
+      .join("");
 
 }
 
 
 function installAddon(){
 
-  if(selected.length===0){
+  if(selected.length === 0){
 
     alert(
       "Add at least one show first."
@@ -492,10 +856,12 @@ function installAddon(){
 
   }
 
+
   const ids =
     selected
       .map(show => show.id)
       .join(",");
+
 
   const rows =
     [
@@ -504,14 +870,17 @@ function installAddon(){
       "airingthisweek",
       "returningsoon"
     ]
-    .filter(
-      row =>
-        document.getElementById(
-          "row_"+row
-        ).checked
-    );
+      .filter(
+        row =>
+          document
+            .getElementById(
+              "row_" + row
+            )
+            .checked
+      );
 
-  if(rows.length===0){
+
+  if(rows.length === 0){
 
     alert(
       "Turn on at least one Home row."
@@ -521,20 +890,21 @@ function installAddon(){
 
   }
 
+
   const config =
-    ids+"~"+rows.join(",");
+    ids + "~" + rows.join(",");
 
   const base =
     window.location.origin;
 
   const manifestUrl =
-    base+
-    "/"+
-    config+
+    base +
+    "/" +
+    config +
     "/manifest.json";
 
   const stremioUrl =
-    "stremio://"+
+    "stremio://" +
     manifestUrl.substring(
       "https://".length
     );
@@ -559,7 +929,7 @@ function openStremio(){
 
   if(
     !window.stremioInstallUrl
-  )return;
+  ) return;
 
   window.location.href =
     window.stremioInstallUrl;
@@ -582,22 +952,16 @@ function escapeHtml(text){
 function escapeJs(text){
 
   return String(text)
-    .replace(/\\\\/g,"\\\\\\\\")
-    .replace(/'/g,"\\\\'")
+    .replace(/\\/g,"\\\\")
+    .replace(/'/g,"\\'")
     .replace(/"/g,"&quot;");
 
 }
 
 
-/*
-====================================================
-LOAD EXISTING PERSONALIZED SHOWS
-====================================================
-*/
-
 async function loadExistingShows(){
 
-  if(initialIds.length===0){
+  if(initialIds.length === 0){
 
     renderSelected();
 
@@ -605,11 +969,12 @@ async function loadExistingShows(){
 
   }
 
+
   try{
 
     const response =
       await fetch(
-        "/api/shows?ids="+
+        "/api/shows?ids=" +
         initialIds.join(",")
       );
 
@@ -622,10 +987,12 @@ async function loadExistingShows(){
     ){
 
       selected =
-        data.results.map(show => ({
-          id:show.id,
-          name:show.name
-        }));
+        data.results.map(
+          show => ({
+            id:show.id,
+            name:show.name
+          })
+        );
 
     }
 
@@ -649,216 +1016,247 @@ loadExistingShows();
 
 </script>
 
-</body></html>`);
+</body>
+</html>
+  `);
 
 }
 
 
-app.get("/configure", async (req, res) => {
+app.get(
+  "/configure",
+  async (req,res) => {
 
-  await sendConfigure(
-    req,
-    res,
-    null
-  );
-
-});
-
-
-app.get("/:config/configure", async (req, res) => {
-
-  await sendConfigure(
-    req,
-    res,
-    req.params.config
-  );
-
-});
-
-
-/*
-====================================================
-TMDB SEARCH FOR CONFIG PAGE
-====================================================
-*/
-
-app.get("/api/search", async (req, res) => {
-
-  try {
-
-    if (!TMDB_API_KEY) {
-
-      return res.status(500).json({
-        error: "TMDB_API_KEY is not configured"
-      });
-
-    }
-
-
-    const query =
-      String(
-        req.query.query || ""
-      ).trim();
-
-
-    if (!query) {
-
-      return res.json({
-        results:[]
-      });
-
-    }
-
-
-    const response =
-      await axios.get(
-        tmdbUrl("/search/tv"),
-        {
-          params: {
-            api_key: TMDB_API_KEY,
-            query: query,
-            language: "en-US",
-            include_adult: false
-          }
-        }
-      );
-
-
-    const results =
-      (response.data.results || [])
-        .slice(0,20)
-        .map(show => {
-
-          return {
-
-            id: show.id,
-
-            name: show.name,
-
-            year:
-              show.first_air_date
-                ? show.first_air_date.substring(0,4)
-                : "",
-
-            poster:
-              imageUrl(
-                show.poster_path
-              ),
-
-            overview:
-              show.overview || ""
-
-          };
-
-        });
-
-
-    res.json({
-      results: results
-    });
-
-
-  } catch (error) {
-
-    console.error(
-      error.response
-        ? error.response.data
-        : error.message
+    await sendConfigure(
+      req,
+      res,
+      null
     );
 
+  }
+);
 
-    res.status(500).json({
-      error: "Failed to search TV shows"
-    });
+
+app.get(
+  "/:config/configure",
+  async (req,res) => {
+
+    await sendConfigure(
+      req,
+      res,
+      req.params.config
+    );
 
   }
-
-});
+);
 
 
 /*
 ====================================================
-LOAD EXISTING SHOWS FOR CONFIG PAGE
+TMDB SEARCH
 ====================================================
 */
 
-app.get("/api/shows", async (req, res) => {
+app.get(
+  "/api/search",
+  async (req,res) => {
 
-  try {
+    try{
 
-    if (!TMDB_API_KEY) {
+      if(!TMDB_API_KEY){
 
-      return res.status(500).json({
-        error: "TMDB_API_KEY is not configured"
-      });
-
-    }
-
-
-    const ids =
-      String(req.query.ids || "")
-        .split(",")
-        .map(id => Number(id.trim()))
-        .filter(
-          id =>
-            Number.isInteger(id) &&
-            id > 0
-        );
-
-
-    const results = [];
-
-
-    for (const id of ids) {
-
-      try {
-
-        const show =
-          await getShowDetails(id);
-
-        results.push({
-
-          id: show.id,
-
-          name: show.name
-
+        return res.status(500).json({
+          error:
+            "TMDB_API_KEY is not configured"
         });
-
-      } catch (error) {
-
-        console.error(
-          "Failed to load show " + id,
-          error.response
-            ? error.response.data
-            : error.message
-        );
 
       }
 
+
+      const query =
+        String(
+          req.query.query || ""
+        ).trim();
+
+
+      if(!query){
+
+        return res.json({
+          results:[]
+        });
+
+      }
+
+
+      const response =
+        await axios.get(
+          tmdbUrl("/search/tv"),
+          {
+            params:{
+              api_key:
+                TMDB_API_KEY,
+
+              query:
+                query,
+
+              language:
+                "en-US",
+
+              include_adult:
+                false
+            }
+          }
+        );
+
+
+      const results =
+        (response.data.results || [])
+          .slice(0,20)
+          .map(show => {
+
+            return {
+
+              id:
+                show.id,
+
+              name:
+                show.name,
+
+              year:
+                show.first_air_date
+                  ? show.first_air_date.substring(0,4)
+                  : "",
+
+              poster:
+                imageUrl(
+                  show.poster_path
+                ),
+
+              overview:
+                show.overview || ""
+
+            };
+
+          });
+
+
+      res.json({
+        results:
+          results
+      });
+
+
+    }catch(error){
+
+      console.error(
+        error.response
+          ? error.response.data
+          : error.message
+      );
+
+      res.status(500).json({
+        error:
+          "Failed to search TV shows"
+      });
+
     }
 
-
-    res.json({
-      results: results
-    });
+  }
+);
 
 
-  } catch (error) {
+/*
+====================================================
+LOAD EXISTING SHOWS
+====================================================
+*/
 
-    console.error(
-      error.response
-        ? error.response.data
-        : error.message
-    );
+app.get(
+  "/api/shows",
+  async (req,res) => {
+
+    try{
+
+      if(!TMDB_API_KEY){
+
+        return res.status(500).json({
+          error:
+            "TMDB_API_KEY is not configured"
+        });
+
+      }
 
 
-    res.status(500).json({
-      error: "Failed to load selected shows"
-    });
+      const ids =
+        String(
+          req.query.ids || ""
+        )
+          .split(",")
+          .map(id => Number(id.trim()))
+          .filter(
+            id =>
+              Number.isInteger(id) &&
+              id > 0
+          );
+
+
+      const results = [];
+
+
+      for(const id of ids){
+
+        try{
+
+          const show =
+            await getShowDetails(id);
+
+          results.push({
+
+            id:
+              show.id,
+
+            name:
+              show.name
+
+          });
+
+        }catch(error){
+
+          console.error(
+            "Failed to load show " + id,
+            error.response
+              ? error.response.data
+              : error.message
+          );
+
+        }
+
+      }
+
+
+      res.json({
+        results:
+          results
+      });
+
+
+    }catch(error){
+
+      console.error(
+        error.response
+          ? error.response.data
+          : error.message
+      );
+
+      res.status(500).json({
+        error:
+          "Failed to load selected shows"
+      });
+
+    }
 
   }
-
-});
+);
 
 
 /*
@@ -867,7 +1265,11 @@ MANIFEST
 ====================================================
 */
 
-async function sendManifest(req, res, config) {
+async function sendManifest(
+  req,
+  res,
+  config
+){
 
   const rows =
     getRowsFromConfig(config);
@@ -875,9 +1277,9 @@ async function sendManifest(req, res, config) {
   const catalogs = [];
 
 
-  if (
+  if(
     rows.includes("myshows")
-  ) {
+  ){
 
     catalogs.push({
       type:"series",
@@ -888,9 +1290,9 @@ async function sendManifest(req, res, config) {
   }
 
 
-  if (
+  if(
     rows.includes("whatsnext")
-  ) {
+  ){
 
     catalogs.push({
       type:"series",
@@ -901,9 +1303,9 @@ async function sendManifest(req, res, config) {
   }
 
 
-  if (
+  if(
     rows.includes("airingthisweek")
-  ) {
+  ){
 
     catalogs.push({
       type:"series",
@@ -914,9 +1316,9 @@ async function sendManifest(req, res, config) {
   }
 
 
-  if (
+  if(
     rows.includes("returningsoon")
-  ) {
+  ){
 
     catalogs.push({
       type:"series",
@@ -929,11 +1331,14 @@ async function sendManifest(req, res, config) {
 
   res.json({
 
-    id:"com.nick1234.myshows",
+    id:
+      "com.nick1234.myshows",
 
-    version:"2.3.0",
+    version:
+      "2.3.0",
 
-    name:"My Shows",
+    name:
+      "My Shows",
 
     description:
       "Track upcoming episodes and add shows you're watching.",
@@ -951,7 +1356,8 @@ async function sendManifest(req, res, config) {
       configurable:true
     },
 
-    catalogs:catalogs
+    catalogs:
+      catalogs
 
   });
 
@@ -988,18 +1394,22 @@ app.get(
 
 /*
 ====================================================
-CATALOG
+MY SHOWS
 ====================================================
 */
 
-async function sendMyShows(req, res, config) {
+async function sendMyShows(
+  req,
+  res,
+  config
+){
 
-  try {
+  try{
 
-    if (
+    if(
       !getRowsFromConfig(config)
         .includes("myshows")
-    ) {
+    ){
 
       return res.json({
         metas:[]
@@ -1008,10 +1418,11 @@ async function sendMyShows(req, res, config) {
     }
 
 
-    if (!TMDB_API_KEY) {
+    if(!TMDB_API_KEY){
 
       return res.status(500).json({
-        error: "TMDB_API_KEY is not configured"
+        error:
+          "TMDB_API_KEY is not configured"
       });
 
     }
@@ -1020,11 +1431,10 @@ async function sendMyShows(req, res, config) {
     const shows =
       getShowsFromConfig(config);
 
-
     const metas = [];
 
 
-    for (const show of shows) {
+    for(const show of shows){
 
       const data =
         await getShowDetails(
@@ -1036,7 +1446,7 @@ async function sendMyShows(req, res, config) {
         data.overview || "";
 
 
-      if (data.next_episode_to_air) {
+      if(data.next_episode_to_air){
 
         const next =
           data.next_episode_to_air;
@@ -1051,7 +1461,9 @@ async function sendMyShows(req, res, config) {
           " - " +
           next.name +
           " • " +
-          formatDate(next.air_date) +
+          formatDate(
+            next.air_date
+          ) +
           " — " +
           description;
 
@@ -1064,9 +1476,11 @@ async function sendMyShows(req, res, config) {
           "tmdb:" +
           data.id,
 
-        type:"series",
+        type:
+          "series",
 
-        name:data.name,
+        name:
+          data.name,
 
         poster:
           imageUrl(
@@ -1088,11 +1502,12 @@ async function sendMyShows(req, res, config) {
 
 
     res.json({
-      metas: metas
+      metas:
+        metas
     });
 
 
-  } catch(error) {
+  }catch(error){
 
     console.error(
       error.response
@@ -1100,9 +1515,9 @@ async function sendMyShows(req, res, config) {
         : error.message
     );
 
-
     res.status(500).json({
-      error:"Failed to load My Shows"
+      error:
+        "Failed to load My Shows"
     });
 
   }
@@ -1148,14 +1563,14 @@ async function sendAiringThisWeek(
   req,
   res,
   config
-) {
+){
 
-  try {
+  try{
 
-    if (
+    if(
       !getRowsFromConfig(config)
         .includes("airingthisweek")
-    ) {
+    ){
 
       return res.json({
         metas:[]
@@ -1164,10 +1579,11 @@ async function sendAiringThisWeek(
     }
 
 
-    if (!TMDB_API_KEY) {
+    if(!TMDB_API_KEY){
 
       return res.status(500).json({
-        error:"TMDB_API_KEY is not configured"
+        error:
+          "TMDB_API_KEY is not configured"
       });
 
     }
@@ -1176,11 +1592,10 @@ async function sendAiringThisWeek(
     const shows =
       getShowsFromConfig(config);
 
-
     const metas = [];
 
 
-    for (const show of shows) {
+    for(const show of shows){
 
       const data =
         await getShowDetails(
@@ -1188,12 +1603,12 @@ async function sendAiringThisWeek(
         );
 
 
-      if (
+      if(
         data.next_episode_to_air &&
         isWithinNext7Days(
           data.next_episode_to_air.air_date
         )
-      ) {
+      ){
 
         const next =
           data.next_episode_to_air;
@@ -1205,9 +1620,11 @@ async function sendAiringThisWeek(
             "tmdb:" +
             data.id,
 
-          type:"series",
+          type:
+            "series",
 
-          name:data.name,
+          name:
+            data.name,
 
           poster:
             imageUrl(
@@ -1241,11 +1658,12 @@ async function sendAiringThisWeek(
 
 
     res.json({
-      metas: metas
+      metas:
+        metas
     });
 
 
-  } catch(error) {
+  }catch(error){
 
     console.error(
       error.response
@@ -1253,9 +1671,9 @@ async function sendAiringThisWeek(
         : error.message
     );
 
-
     res.status(500).json({
-      error:"Failed to load Airing This Week"
+      error:
+        "Failed to load Airing This Week"
     });
 
   }
@@ -1301,14 +1719,14 @@ async function sendWhatsNext(
   req,
   res,
   config
-) {
+){
 
-  try {
+  try{
 
-    if (
+    if(
       !getRowsFromConfig(config)
         .includes("whatsnext")
-    ) {
+    ){
 
       return res.json({
         metas:[]
@@ -1317,10 +1735,11 @@ async function sendWhatsNext(
     }
 
 
-    if (!TMDB_API_KEY) {
+    if(!TMDB_API_KEY){
 
       return res.status(500).json({
-        error:"TMDB_API_KEY is not configured"
+        error:
+          "TMDB_API_KEY is not configured"
       });
 
     }
@@ -1343,9 +1762,9 @@ async function sendWhatsNext(
     const upcoming = [];
 
 
-    for (const show of shows) {
+    for(const show of shows){
 
-      try {
+      try{
 
         const data =
           await getShowDetails(
@@ -1358,10 +1777,10 @@ async function sendWhatsNext(
           null;
 
 
-        if (
+        if(
           !nextEpisode ||
           !nextEpisode.air_date
-        ) {
+        ){
 
           const seasons =
             (data.seasons || [])
@@ -1376,9 +1795,9 @@ async function sendWhatsNext(
               );
 
 
-          for (
+          for(
             const season of seasons
-          ) {
+          ){
 
             const seasonEpisodes =
               await getSeasonEpisodes(
@@ -1407,7 +1826,7 @@ async function sendWhatsNext(
                 )[0];
 
 
-            if (found) {
+            if(found){
 
               nextEpisode =
                 found;
@@ -1421,10 +1840,10 @@ async function sendWhatsNext(
         }
 
 
-        if (
+        if(
           !nextEpisode ||
           !nextEpisode.air_date
-        ) {
+        ){
 
           continue;
 
@@ -1438,7 +1857,7 @@ async function sendWhatsNext(
           );
 
 
-        if (airDate < today) {
+        if(airDate < today){
 
           continue;
 
@@ -1447,21 +1866,23 @@ async function sendWhatsNext(
 
         upcoming.push({
 
-          data:data,
+          data:
+            data,
 
-          episode:nextEpisode,
+          episode:
+            nextEpisode,
 
           airTime:
             airDate.getTime()
 
         });
 
-
-      } catch(error) {
+      }catch(error){
 
         console.error(
           "Failed to find next episode for TMDB " +
           show.tmdbId,
+
           error.response
             ? error.response.data
             : error.message
@@ -1482,7 +1903,6 @@ async function sendWhatsNext(
     res.json({
 
       metas:
-
         upcoming.map(
           item => {
 
@@ -1499,7 +1919,8 @@ async function sendWhatsNext(
                 "tmdb:" +
                 data.id,
 
-              type:"series",
+              type:
+                "series",
 
               name:
                 data.name +
@@ -1544,8 +1965,7 @@ async function sendWhatsNext(
 
     });
 
-
-  } catch(error) {
+  }catch(error){
 
     console.error(
       error.response
@@ -1553,9 +1973,9 @@ async function sendWhatsNext(
         : error.message
     );
 
-
     res.status(500).json({
-      error:"Failed to load What's Next?"
+      error:
+        "Failed to load What's Next?"
     });
 
   }
@@ -1597,9 +2017,12 @@ RETURNING SOON
 ====================================================
 */
 
-function isReturningSoon(dateString) {
+function isReturningSoon(
+  dateString
+){
 
-  if (!dateString) return false;
+  if(!dateString) return false;
+
 
   const today =
     new Date();
@@ -1623,7 +2046,8 @@ function isReturningSoon(dateString) {
     new Date(today);
 
   sevenDays.setUTCDate(
-    sevenDays.getUTCDate() + 7
+    sevenDays.getUTCDate() +
+    7
   );
 
 
@@ -1636,14 +2060,14 @@ async function sendReturningSoon(
   req,
   res,
   config
-) {
+){
 
-  try {
+  try{
 
-    if (
+    if(
       !getRowsFromConfig(config)
         .includes("returningsoon")
-    ) {
+    ){
 
       return res.json({
         metas:[]
@@ -1652,10 +2076,11 @@ async function sendReturningSoon(
     }
 
 
-    if (!TMDB_API_KEY) {
+    if(!TMDB_API_KEY){
 
       return res.status(500).json({
-        error:"TMDB_API_KEY is not configured"
+        error:
+          "TMDB_API_KEY is not configured"
       });
 
     }
@@ -1667,7 +2092,7 @@ async function sendReturningSoon(
     const metas = [];
 
 
-    for (const show of shows) {
+    for(const show of shows){
 
       const data =
         await getShowDetails(
@@ -1675,12 +2100,12 @@ async function sendReturningSoon(
         );
 
 
-      if (
+      if(
         data.next_episode_to_air &&
         isReturningSoon(
           data.next_episode_to_air.air_date
         )
-      ) {
+      ){
 
         const next =
           data.next_episode_to_air;
@@ -1692,7 +2117,8 @@ async function sendReturningSoon(
             "tmdb:" +
             data.id,
 
-          type:"series",
+          type:
+            "series",
 
           name:
             data.name,
@@ -1728,11 +2154,12 @@ async function sendReturningSoon(
 
 
     res.json({
-      metas:metas
+      metas:
+        metas
     });
 
 
-  } catch(error) {
+  }catch(error){
 
     console.error(
       error.response
@@ -1740,9 +2167,9 @@ async function sendReturningSoon(
         : error.message
     );
 
-
     res.status(500).json({
-      error:"Failed to load Returning Soon"
+      error:
+        "Failed to load Returning Soon"
     });
 
   }
@@ -1787,14 +2214,15 @@ META
 async function sendMeta(
   req,
   res
-) {
+){
 
-  try {
+  try{
 
-    if (!TMDB_API_KEY) {
+    if(!TMDB_API_KEY){
 
       return res.status(500).json({
-        error:"TMDB_API_KEY is not configured"
+        error:
+          "TMDB_API_KEY is not configured"
       });
 
     }
@@ -1804,12 +2232,13 @@ async function sendMeta(
       req.params.id;
 
 
-    if (
+    if(
       !id.startsWith("tmdb:")
-    ) {
+    ){
 
       return res.status(404).json({
-        error:"Unknown show ID"
+        error:
+          "Unknown show ID"
       });
 
     }
@@ -1850,11 +2279,11 @@ async function sendMeta(
         );
 
 
-    for (
+    for(
       const season of seasons
-    ) {
+    ){
 
-      try {
+      try{
 
         const seasonEpisodes =
           await getSeasonEpisodes(
@@ -1869,16 +2298,19 @@ async function sendMeta(
           );
 
 
-      } catch (error) {
+      }catch(error){
 
         console.error(
+
           "Failed to load season " +
           season.season_number +
           " for TMDB " +
           tmdbId,
+
           error.response
             ? error.response.data
             : error.message
+
         );
 
       }
@@ -1935,6 +2367,89 @@ async function sendMeta(
       );
 
 
+    /*
+    ====================================================
+    SHOW STATUS
+    ====================================================
+    */
+
+    let statusText = "";
+
+
+    if(
+      data.status === "Ended"
+    ){
+
+      statusText =
+        "🔴 Ended";
+
+    }else if(
+      data.status === "Canceled"
+    ){
+
+      statusText =
+        "🔴 Canceled";
+
+    }else if(
+      data.status === "Returning Series" &&
+      data.next_episode_to_air
+    ){
+
+      const next =
+        data.next_episode_to_air;
+
+
+      statusText =
+        "🟢 Currently Airing" +
+        "\n" +
+        "Next Episode: S" +
+        next.season_number +
+        " E" +
+        next.episode_number +
+        " — " +
+        next.name +
+        "\n" +
+        "Airs: " +
+        formatDate(
+          next.air_date
+        );
+
+    }else if(
+      data.status === "Returning Series"
+    ){
+
+      statusText =
+        "🔵 Returning Series";
+
+    }else if(
+      data.status === "In Production"
+    ){
+
+      statusText =
+        "🟡 In Production";
+
+    }else if(
+      data.status === "Planned"
+    ){
+
+      statusText =
+        "⚪ Planned";
+
+    }
+
+
+    const overview =
+      data.overview || "";
+
+
+    const metaDescription =
+      statusText
+        ? statusText +
+          "\n\n" +
+          overview
+        : overview;
+
+
     res.json({
 
       meta: {
@@ -1943,7 +2458,8 @@ async function sendMeta(
           "tmdb:" +
           data.id,
 
-        type:"series",
+        type:
+          "series",
 
         name:
           data.name,
@@ -1960,11 +2476,12 @@ async function sendMeta(
           ),
 
         description:
-          data.overview || "",
+          metaDescription,
 
         releaseInfo:
           data.first_air_date
-            ? data.first_air_date.substring(0,4) + "-"
+            ? data.first_air_date.substring(0,4) +
+              "-"
             : undefined,
 
         videos:
@@ -1975,7 +2492,7 @@ async function sendMeta(
     });
 
 
-  } catch(error) {
+  }catch(error){
 
     console.error(
       error.response
@@ -1983,9 +2500,9 @@ async function sendMeta(
         : error.message
     );
 
-
     res.status(500).json({
-      error:"Failed to load show metadata"
+      error:
+        "Failed to load show metadata"
     });
 
   }
