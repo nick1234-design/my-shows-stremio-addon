@@ -21,14 +21,17 @@ const DEFAULT_SHOWS = [
   }
 ];
 
+
 function tmdbUrl(path) {
   return "https://api.themoviedb.org/3" + path;
 }
+
 
 function imageUrl(path, size = "w500") {
   if (!path) return undefined;
   return "https://image.tmdb.org/t/p/" + size + path;
 }
+
 
 function formatDate(dateString) {
   if (!dateString) return null;
@@ -43,6 +46,7 @@ function formatDate(dateString) {
   });
 }
 
+
 function isWithinNext7Days(dateString) {
   if (!dateString) return false;
 
@@ -56,6 +60,7 @@ function isWithinNext7Days(dateString) {
 
   return target >= today && target <= sevenDays;
 }
+
 
 function getShowsFromConfig(config) {
   if (!config) {
@@ -76,6 +81,7 @@ function getShowsFromConfig(config) {
   }));
 }
 
+
 async function getShowDetails(tmdbId) {
   const response = await axios.get(
     tmdbUrl("/tv/" + tmdbId),
@@ -89,6 +95,7 @@ async function getShowDetails(tmdbId) {
   return response.data;
 }
 
+
 async function getSeasonEpisodes(tmdbId, seasonNumber) {
   const response = await axios.get(
     tmdbUrl("/tv/" + tmdbId + "/season/" + seasonNumber),
@@ -101,6 +108,7 @@ async function getSeasonEpisodes(tmdbId, seasonNumber) {
 
   return response.data.episodes || [];
 }
+
 
 /*
 ====================================================
@@ -167,6 +175,7 @@ async function sendConfigure(req, res, config) {
 
     for (const id of ids) {
       try {
+
         const data = await getShowDetails(Number(id));
 
         initialShows.push({
@@ -183,6 +192,7 @@ async function sendConfigure(req, res, config) {
       }
     }
   }
+
 
   res.send(`
 <!DOCTYPE html>
@@ -669,6 +679,7 @@ renderSelected();
 
 }
 
+
 app.get("/configure", async (req, res) => {
 
   await sendConfigure(
@@ -678,6 +689,7 @@ app.get("/configure", async (req, res) => {
   );
 
 });
+
 
 app.get("/:config/configure", async (req, res) => {
 
@@ -1200,43 +1212,55 @@ async function sendMeta(
       );
 
 
-    let seasonNumber = null;
-
-
-    if (
-      data.next_episode_to_air
-    ) {
-
-      seasonNumber =
-        data.next_episode_to_air.season_number;
-
-    } else if (
-      data.last_episode_to_air
-    ) {
-
-      seasonNumber =
-        data.last_episode_to_air.season_number;
-
-    } else if (
-      data.number_of_seasons
-    ) {
-
-      seasonNumber =
-        data.number_of_seasons;
-
-    }
-
+    /*
+    ====================================================
+    LOAD ALL SEASONS AND EPISODES
+    ====================================================
+    */
 
     let episodes = [];
 
-
-    if (seasonNumber) {
-
-      episodes =
-        await getSeasonEpisodes(
-          tmdbId,
-          seasonNumber
+    const seasons =
+      (data.seasons || [])
+        .filter(
+          season =>
+            season.season_number > 0
+        )
+        .sort(
+          (a, b) =>
+            a.season_number -
+            b.season_number
         );
+
+
+    for (const season of seasons) {
+
+      try {
+
+        const seasonEpisodes =
+          await getSeasonEpisodes(
+            tmdbId,
+            season.season_number
+          );
+
+        episodes =
+          episodes.concat(
+            seasonEpisodes
+          );
+
+      } catch (error) {
+
+        console.error(
+          "Failed to load season " +
+          season.season_number +
+          " for TMDB " +
+          tmdbId,
+          error.response
+            ? error.response.data
+            : error.message
+        );
+
+      }
 
     }
 
