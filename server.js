@@ -102,7 +102,6 @@ async function getSeasonEpisodes(tmdbId, seasonNumber) {
   return response.data.episodes || [];
 }
 
-
 /*
 ====================================================
 HOME
@@ -807,7 +806,7 @@ async function sendManifest(req, res, config) {
 
     id: "com.nick1234.myshows",
 
-    version: "2.1.0",
+    version: "2.2.0",
 
     name: "My Shows",
 
@@ -845,6 +844,12 @@ async function sendManifest(req, res, config) {
         type: "series",
         id: "whatsnext",
         name: "What's Next?"
+      },
+
+      {
+        type: "series",
+        id: "returningsoon",
+        name: "Returning Soon"
       }
 
     ]
@@ -1187,7 +1192,7 @@ async function sendWhatsNext(
     const today =
       new Date();
 
-    today.setUTCHours(0,0,0,0);
+    today.setUTCHours(0, 0, 0, 0);
 
 
     const upcoming = [];
@@ -1202,10 +1207,8 @@ async function sendWhatsNext(
             show.tmdbId
           );
 
-
         let nextEpisode =
           data.next_episode_to_air || null;
-
 
         if (
           !nextEpisode ||
@@ -1215,12 +1218,14 @@ async function sendWhatsNext(
           const seasons =
             (data.seasons || [])
               .filter(
-                season => season.season_number > 0
+                season =>
+                  season.season_number > 0
               )
               .sort(
-                (a,b) => a.season_number - b.season_number
+                (a, b) =>
+                  a.season_number -
+                  b.season_number
               );
-
 
           for (const season of seasons) {
 
@@ -1230,80 +1235,63 @@ async function sendWhatsNext(
                 season.season_number
               );
 
-
             const found =
               seasonEpisodes
                 .filter(
                   episode =>
                     episode.air_date &&
                     new Date(
-                      episode.air_date + "T00:00:00Z"
+                      episode.air_date +
+                      "T00:00:00Z"
                     ) >= today
                 )
                 .sort(
-                  (a,b) =>
-                    a.air_date.localeCompare(b.air_date) ||
-                    a.episode_number - b.episode_number
+                  (a, b) =>
+                    a.air_date.localeCompare(
+                      b.air_date
+                    ) ||
+                    a.episode_number -
+                    b.episode_number
                 )[0];
 
-
             if (found) {
-
               nextEpisode = found;
-
               break;
-
             }
-
           }
-
         }
-
 
         if (
           !nextEpisode ||
           !nextEpisode.air_date
         ) {
-
           continue;
-
         }
-
 
         const airDate =
           new Date(
-            nextEpisode.air_date + "T00:00:00Z"
+            nextEpisode.air_date +
+            "T00:00:00Z"
           );
 
-
         if (airDate < today) {
-
           continue;
-
         }
 
-
         upcoming.push({
-
-          data:data,
-
-          episode:nextEpisode,
-
-          airTime:airDate.getTime()
-
+          data: data,
+          episode: nextEpisode,
+          airTime: airDate.getTime()
         });
 
-      } catch(error) {
+      } catch (error) {
 
         console.error(
-
-          "Failed to load What's Next show " +
+          "Failed to find next episode for TMDB " +
           show.tmdbId,
-
           error.response
             ? error.response.data
             : error.message
-
         );
 
       }
@@ -1312,7 +1300,7 @@ async function sendWhatsNext(
 
 
     upcoming.sort(
-      (a,b) =>
+      (a, b) =>
         a.airTime - b.airTime
     );
 
@@ -1320,9 +1308,11 @@ async function sendWhatsNext(
     const metas =
       upcoming.map(item => {
 
-        const data = item.data;
-        const next = item.episode;
+        const data =
+          item.data;
 
+        const next =
+          item.episode;
 
         return {
 
@@ -1332,7 +1322,12 @@ async function sendWhatsNext(
 
           type:"series",
 
-          name:data.name,
+          name:
+            data.name +
+            " — S" +
+            next.season_number +
+            " E" +
+            next.episode_number,
 
           poster:
             imageUrl(
@@ -1346,20 +1341,17 @@ async function sendWhatsNext(
             ),
 
           description:
-            "Next episode: " +
-            "S" +
+            "Next episode: S" +
             next.season_number +
             " E" +
             next.episode_number +
-            " - " +
+            " — " +
             next.name +
             " • " +
             formatDate(next.air_date) +
-            (
-              next.overview
-                ? " — " + next.overview
-                : ""
-            )
+            (next.overview
+              ? " — " + next.overview
+              : "")
 
         };
 
@@ -1367,7 +1359,7 @@ async function sendWhatsNext(
 
 
     res.json({
-      metas:metas
+      metas: metas
     });
 
 
@@ -1379,8 +1371,9 @@ async function sendWhatsNext(
         : error.message
     );
 
+
     res.status(500).json({
-      error:"Failed to load What's Next"
+      error:"Failed to load What's Next?"
     });
 
   }
@@ -1407,6 +1400,285 @@ app.get(
   async (req,res) => {
 
     await sendWhatsNext(
+      req,
+      res,
+      req.params.config
+    );
+
+  }
+);
+
+
+/*
+====================================================
+RETURNING SOON
+====================================================
+*/
+
+async function sendReturningSoon(
+  req,
+  res,
+  config
+) {
+
+  try {
+
+    if (!TMDB_API_KEY) {
+
+      return res.status(500).json({
+        error:"TMDB_API_KEY is not configured"
+      });
+
+    }
+
+
+    const shows =
+      getShowsFromConfig(config);
+
+
+    const today =
+      new Date();
+
+    today.setUTCHours(0, 0, 0, 0);
+
+
+    const sevenDaysFromToday =
+      new Date(today);
+
+    sevenDaysFromToday.setUTCDate(
+      sevenDaysFromToday.getUTCDate() + 7
+    );
+
+
+    const returning = [];
+
+
+    for (const show of shows) {
+
+      try {
+
+        const data =
+          await getShowDetails(
+            show.tmdbId
+          );
+
+
+        let nextEpisode =
+          data.next_episode_to_air || null;
+
+
+        /*
+        If TMDB does not provide next_episode_to_air,
+        look through the seasons for the first future episode.
+        */
+        if (
+          !nextEpisode ||
+          !nextEpisode.air_date
+        ) {
+
+          const seasons =
+            (data.seasons || [])
+              .filter(
+                season =>
+                  season.season_number > 0
+              )
+              .sort(
+                (a, b) =>
+                  a.season_number -
+                  b.season_number
+              );
+
+
+          for (const season of seasons) {
+
+            const seasonEpisodes =
+              await getSeasonEpisodes(
+                show.tmdbId,
+                season.season_number
+              );
+
+
+            const found =
+              seasonEpisodes
+                .filter(
+                  episode =>
+                    episode.air_date &&
+                    new Date(
+                      episode.air_date +
+                      "T00:00:00Z"
+                    ) > sevenDaysFromToday
+                )
+                .sort(
+                  (a, b) =>
+                    a.air_date.localeCompare(
+                      b.air_date
+                    ) ||
+                    a.episode_number -
+                    b.episode_number
+                )[0];
+
+
+            if (found) {
+              nextEpisode = found;
+              break;
+            }
+
+          }
+
+        }
+
+
+        if (
+          !nextEpisode ||
+          !nextEpisode.air_date
+        ) {
+          continue;
+        }
+
+
+        const airDate =
+          new Date(
+            nextEpisode.air_date +
+            "T00:00:00Z"
+          );
+
+
+        /*
+        Returning Soon starts after the 7-day window,
+        so shows already appearing in Airing This Week
+        or What's Next? are not duplicated here.
+        */
+        if (
+          airDate <= sevenDaysFromToday
+        ) {
+          continue;
+        }
+
+
+        returning.push({
+          data:data,
+          episode:nextEpisode,
+          airTime:airDate.getTime()
+        });
+
+
+      } catch (error) {
+
+        console.error(
+          "Failed to find returning show " +
+          show.tmdbId,
+          error.response
+            ? error.response.data
+            : error.message
+        );
+
+      }
+
+    }
+
+
+    returning.sort(
+      (a, b) =>
+        a.airTime - b.airTime
+    );
+
+
+    const metas =
+      returning.map(item => {
+
+        const data =
+          item.data;
+
+        const next =
+          item.episode;
+
+
+        return {
+
+          id:
+            "tmdb:" +
+            data.id,
+
+          type:"series",
+
+          name:
+            data.name +
+            " — S" +
+            next.season_number +
+            " E" +
+            next.episode_number,
+
+          poster:
+            imageUrl(
+              data.poster_path
+            ),
+
+          background:
+            imageUrl(
+              data.backdrop_path,
+              "w1280"
+            ),
+
+          description:
+            "🔄 Returns " +
+            formatDate(next.air_date) +
+            " — S" +
+            next.season_number +
+            " E" +
+            next.episode_number +
+            ": " +
+            next.name +
+            (next.overview
+              ? " — " + next.overview
+              : "")
+
+        };
+
+      });
+
+
+    res.json({
+      metas:metas
+    });
+
+
+  } catch(error) {
+
+    console.error(
+      error.response
+        ? error.response.data
+        : error.message
+    );
+
+
+    res.status(500).json({
+      error:"Failed to load Returning Soon"
+    });
+
+  }
+
+}
+
+
+app.get(
+  "/catalog/series/returningsoon.json",
+  async (req,res) => {
+
+    await sendReturningSoon(
+      req,
+      res,
+      null
+    );
+
+  }
+);
+
+
+app.get(
+  "/:config/catalog/series/returningsoon.json",
+  async (req,res) => {
+
+    await sendReturningSoon(
       req,
       res,
       req.params.config
@@ -1466,38 +1738,39 @@ async function sendMeta(
       );
 
 
-    let episodes = [];
+    /*
+    ====================================================
+    LOAD ALL SEASONS AND EPISODES
+    ====================================================
+    */
 
+    let episodes = [];
 
     const seasons =
       (data.seasons || [])
         .filter(
-          season => season.season_number > 0
+          season =>
+            season.season_number > 0
         )
         .sort(
-          (a,b) =>
-            a.season_number - b.season_number
+          (a, b) =>
+            a.season_number -
+            b.season_number
         );
 
-
     for (const season of seasons) {
-
       try {
-
         const seasonEpisodes =
           await getSeasonEpisodes(
             tmdbId,
             season.season_number
           );
 
-
         episodes =
           episodes.concat(
             seasonEpisodes
           );
-
-      } catch(error) {
-
+      } catch (error) {
         console.error(
           "Failed to load season " +
           season.season_number +
@@ -1507,9 +1780,7 @@ async function sendMeta(
             ? error.response.data
             : error.message
         );
-
       }
-
     }
 
 
