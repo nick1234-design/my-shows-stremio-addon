@@ -6,19 +6,6 @@ const PORT = process.env.PORT || 3000;
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 
-// Allow Stremio and other addon clients to access every HTTP route.
-app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-
-  next();
-});
-
 const DEFAULT_SHOWS = [
   {
     name: "The Drop: A Snowfall Saga",
@@ -2625,7 +2612,7 @@ async function sendMeta(
             season:
               episode.season_number,
 
-            number:
+            episode:
               episode.episode_number,
 
             overview:
