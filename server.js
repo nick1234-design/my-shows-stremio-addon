@@ -70,6 +70,15 @@ const ALL_ROWS = [
   "returningsoon"
 ];
 
+const DEFAULT_SORT = "myorder";
+
+const ALL_SORTS = [
+  "myorder",
+  "nextepisode",
+  "recentlyaired",
+  "alphabetical"
+];
+
 function getShowPartFromConfig(config) {
   if (!config) return "";
   return String(config).split("~")[0];
@@ -98,6 +107,73 @@ function getRowsFromConfig(config) {
   return rows.length > 0
     ? rows
     : DEFAULT_ROWS;
+}
+
+function getSortFromConfig(config) {
+
+  if (!config || !String(config).includes("~")) {
+    return DEFAULT_SORT;
+  }
+
+  const parts = String(config).split("~");
+  const sort = String(parts[2] || "").trim();
+
+  return ALL_SORTS.includes(sort)
+    ? sort
+    : DEFAULT_SORT;
+}
+
+function sortMyShows(items, sort) {
+
+  if (sort === "alphabetical") {
+    return items.sort((a,b) =>
+      a.data.name.localeCompare(b.data.name)
+    );
+  }
+
+  if (sort === "nextepisode") {
+    return items.sort((a,b) => {
+      const aTime =
+        a.nextTime ??
+        Number.MAX_SAFE_INTEGER;
+
+      const bTime =
+        b.nextTime ??
+        Number.MAX_SAFE_INTEGER;
+
+      return (
+        aTime -
+        bTime ||
+        a.originalIndex -
+        b.originalIndex
+      );
+    });
+  }
+
+  if (sort === "recentlyaired") {
+    return items.sort((a,b) => {
+
+      const aTime =
+        a.lastTime ?? 0;
+
+      const bTime =
+        b.lastTime ?? 0;
+
+      return (
+        bTime -
+        aTime ||
+        a.originalIndex -
+        b.originalIndex
+      );
+
+    });
+  }
+
+  return items.sort(
+    (a,b) =>
+      a.originalIndex -
+      b.originalIndex
+  );
 }
 
 function getShowsFromConfig(config) {
@@ -251,6 +327,11 @@ async function sendConfigure(
 
   const initialRows =
     getRowsFromConfig(
+      configString
+    );
+
+  const initialSort =
+    getSortFromConfig(
       configString
     );
 
@@ -441,6 +522,35 @@ button.remove{
 
 .switch input:checked+.slider:before{
   transform:translateX(22px)
+}
+
+.sortBox{
+  margin-top:30px;
+  background:#1c1c1c;
+  padding:15px;
+  border-radius:10px
+}
+
+.sortTitle{
+  font-size:16px;
+  font-weight:bold
+}
+
+.sortDescription{
+  color:#999;
+  font-size:13px;
+  margin-top:5px;
+  margin-bottom:12px
+}
+
+.sortBox select{
+  width:100%;
+  padding:12px;
+  border-radius:8px;
+  border:1px solid #444;
+  background:#202020;
+  color:white;
+  font-size:16px
 }
 
 .install{
@@ -659,11 +769,45 @@ Shows returning more than 7 days from now.
 </div>
 
 
+<div class="sortBox">
+
+<div class="sortTitle">
+Sort My Shows
+</div>
+
+<div class="sortDescription">
+Choose how your shows appear in the My Shows row.
+Other smart rows keep their own date-based order.
+</div>
+
+<select id="sortOrder">
+
+<option value="myorder">
+My Order
+</option>
+
+<option value="nextepisode">
+Next Episode
+</option>
+
+<option value="recentlyaired">
+Recently Aired
+</option>
+
+<option value="alphabetical">
+Alphabetical
+</option>
+
+</select>
+
+</div>
+
+
 <button
   class="install"
   onclick="installAddon()"
 >
-Update My Shows
+Generate My Shows Addon
 </button>
 
 
@@ -689,6 +833,7 @@ Open in Stremio
 
 </div>
 
+
 </div>
 
 
@@ -700,25 +845,58 @@ ${JSON.stringify(initialIds)};
 const initialRows =
 ${JSON.stringify(initialRows)};
 
+const initialSort =
+${JSON.stringify(initialSort)};
+
 let selected = [];
 
 
 function applyInitialRows(){
 
-  [
-    "myshows",
-    "whatsnext",
-    "airingthisweek",
-    "recentlyaired",
-    "returningsoon"
-  ].forEach(row => {
+  document.getElementById(
+    "row_myshows"
+  ).checked =
+    initialRows.includes(
+      "myshows"
+    );
 
-    document.getElementById(
-      "row_" + row
-    ).checked =
-      initialRows.includes(row);
+  document.getElementById(
+    "row_whatsnext"
+  ).checked =
+    initialRows.includes(
+      "whatsnext"
+    );
 
-  });
+  document.getElementById(
+    "row_airingthisweek"
+  ).checked =
+    initialRows.includes(
+      "airingthisweek"
+    );
+
+  document.getElementById(
+    "row_recentlyaired"
+  ).checked =
+    initialRows.includes(
+      "recentlyaired"
+    );
+
+  document.getElementById(
+    "row_returningsoon"
+  ).checked =
+    initialRows.includes(
+      "returningsoon"
+    );
+
+}
+
+
+function applyInitialSort(){
+
+  document.getElementById(
+    "sortOrder"
+  ).value =
+    initialSort;
 
 }
 
@@ -743,6 +921,7 @@ async function searchShows(){
   results.innerHTML =
     '<div class="message">Searching...</div>';
 
+
   try{
 
     const response =
@@ -753,6 +932,7 @@ async function searchShows(){
 
     const data =
       await response.json();
+
 
     if(
       !data.results ||
@@ -765,6 +945,7 @@ async function searchShows(){
       return;
 
     }
+
 
     results.innerHTML =
       data.results
@@ -780,35 +961,37 @@ async function searchShows(){
                 item.id === show.id
             );
 
-          return \`
+
+          return `
             <div class="show">
 
-              <img src="\${poster}">
+              <img src="${poster}">
 
               <div class="showInfo">
 
                 <div class="showTitle">
-                  \${escapeHtml(show.name)}
+                  ${escapeHtml(show.name)}
                 </div>
 
                 <div class="year">
-                  \${show.year || ""}
+                  ${show.year || ""}
                 </div>
 
               </div>
 
               <button
-                onclick="addShow(\${show.id}, '\${escapeJs(show.name)}')"
-                \${alreadyAdded ? "disabled" : ""}
+                onclick="addShow(${show.id}, '${escapeJs(show.name)}')"
+                ${alreadyAdded ? "disabled" : ""}
               >
-                \${alreadyAdded ? "Added" : "Add"}
+                ${alreadyAdded ? "Added" : "Add"}
               </button>
 
             </div>
-          \`;
+          `;
 
         })
         .join("");
+
 
   }catch(error){
 
@@ -836,10 +1019,12 @@ function addShow(
 
   }
 
+
   selected.push({
     id:id,
     name:name
   });
+
 
   renderSelected();
 
@@ -870,6 +1055,7 @@ function renderSelected(){
       "selectedShows"
     );
 
+
   if(
     selected.length === 0
   ){
@@ -881,26 +1067,29 @@ function renderSelected(){
 
   }
 
+
   box.innerHTML =
     selected
-      .map(show => \`
+      .map(show => {
 
-        <div class="selectedItem">
+        return `
+          <div class="selectedItem">
 
-          <span>
-            \${escapeHtml(show.name)}
-          </span>
+            <span>
+              ${escapeHtml(show.name)}
+            </span>
 
-          <button
-            class="remove"
-            onclick="removeShow(\${show.id})"
-          >
-            Remove
-          </button>
+            <button
+              class="remove"
+              onclick="removeShow(${show.id})"
+            >
+              Remove
+            </button>
 
-        </div>
+          </div>
+        `;
 
-      \`)
+      })
       .join("");
 
 }
@@ -920,47 +1109,111 @@ function installAddon(){
 
   }
 
+
   const ids =
     selected
       .map(show => show.id)
       .join(",");
 
-  const rows =
-    [
-      "myshows",
-      "whatsnext",
-      "airingthisweek",
-      "recentlyaired",
-      "returningsoon"
-    ]
-    .filter(
-      row =>
-        document
-          .getElementById(
-            "row_" + row
-          )
-          .checked
+
+  const rows = [];
+
+
+  if(
+    document.getElementById(
+      "row_myshows"
+    ).checked
+  ){
+
+    rows.push(
+      "myshows"
     );
+
+  }
+
+
+  if(
+    document.getElementById(
+      "row_whatsnext"
+    ).checked
+  ){
+
+    rows.push(
+      "whatsnext"
+    );
+
+  }
+
+
+  if(
+    document.getElementById(
+      "row_airingthisweek"
+    ).checked
+  ){
+
+    rows.push(
+      "airingthisweek"
+    );
+
+  }
+
+
+  if(
+    document.getElementById(
+      "row_recentlyaired"
+    ).checked
+  ){
+
+    rows.push(
+      "recentlyaired"
+    );
+
+  }
+
+
+  if(
+    document.getElementById(
+      "row_returningsoon"
+    ).checked
+  ){
+
+    rows.push(
+      "returningsoon"
+    );
+
+  }
+
 
   if(
     rows.length === 0
   ){
 
     alert(
-      "Turn on at least one Home row."
+      "Choose at least one Home row."
     );
 
     return;
 
   }
 
+
+  const sort =
+    document.getElementById(
+      "sortOrder"
+    ).value;
+
+
   const config =
     ids +
     "~" +
-    rows.join(",");
+    rows.join(",") +
+    "~" +
+    sort;
+
 
   const base =
     window.location.origin;
+
 
   const manifestUrl =
     base +
@@ -968,21 +1221,25 @@ function installAddon(){
     config +
     "/manifest.json";
 
+
   const stremioUrl =
     "stremio://" +
     manifestUrl.substring(
       "https://".length
     );
 
+
   document.getElementById(
     "installUrl"
   ).textContent =
     manifestUrl;
 
+
   document.getElementById(
     "installBox"
   ).style.display =
     "block";
+
 
   window.stremioInstallUrl =
     stremioUrl;
@@ -995,7 +1252,9 @@ function openStremio(){
   if(
     !window.stremioInstallUrl
   ){
+
     return;
+
   }
 
   window.location.href =
@@ -1007,11 +1266,26 @@ function openStremio(){
 function escapeHtml(text){
 
   return String(text)
-    .replace(/&/g,"&amp;")
-    .replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;")
-    .replace(/"/g,"&quot;")
-    .replace(/'/g,"&#039;");
+    .replace(
+      /&/g,
+      "&amp;"
+    )
+    .replace(
+      /</g,
+      "&lt;"
+    )
+    .replace(
+      />/g,
+      "&gt;"
+    )
+    .replace(
+      /"/g,
+      "&quot;"
+    )
+    .replace(
+      /'/g,
+      "&#039;"
+    );
 
 }
 
@@ -1019,9 +1293,18 @@ function escapeHtml(text){
 function escapeJs(text){
 
   return String(text)
-    .replace(/\\\\/g,"\\\\\\\\")
-    .replace(/'/g,"\\\\'")
-    .replace(/"/g,"&quot;");
+    .replace(
+      /\\/g,
+      "\\\\"
+    )
+    .replace(
+      /'/g,
+      "\\'"
+    )
+    .replace(
+      /"/g,
+      "&quot;"
+    );
 
 }
 
@@ -1038,6 +1321,7 @@ async function loadExistingShows(){
 
   }
 
+
   try{
 
     const response =
@@ -1046,8 +1330,10 @@ async function loadExistingShows(){
         initialIds.join(",")
       );
 
+
     const data =
       await response.json();
+
 
     if(
       data.results &&
@@ -1075,12 +1361,15 @@ async function loadExistingShows(){
 
   }
 
+
   renderSelected();
 
 }
 
 
 applyInitialRows();
+
+applyInitialSort();
 
 loadExistingShows();
 
@@ -1143,10 +1432,12 @@ app.get(
 
       }
 
+
       const query =
         String(
           req.query.query || ""
         ).trim();
+
 
       if(!query){
 
@@ -1155,6 +1446,7 @@ app.get(
         });
 
       }
+
 
       const response =
         await axios.get(
@@ -1175,6 +1467,7 @@ app.get(
             }
           }
         );
+
 
       const results =
         (response.data.results || [])
@@ -1206,9 +1499,12 @@ app.get(
 
           });
 
+
       res.json({
-        results:results
+        results:
+          results
       });
+
 
     }catch(error){
 
@@ -1217,6 +1513,7 @@ app.get(
           ? error.response.data
           : error.message
       );
+
 
       res.status(500).json({
         error:
@@ -1231,7 +1528,7 @@ app.get(
 
 /*
 ====================================================
-LOAD SELECTED SHOWS FOR CONFIG PAGE
+LOAD EXISTING SHOWS FOR CONFIGURE PAGE
 ====================================================
 */
 
@@ -1250,22 +1547,24 @@ app.get(
 
       }
 
+
       const ids =
         String(
           req.query.ids || ""
         )
-        .split(",")
-        .map(
-          id =>
-            Number(id.trim())
-        )
-        .filter(
-          id =>
-            Number.isInteger(id) &&
-            id > 0
-        );
+          .split(",")
+          .map(
+            id =>
+              id.trim()
+          )
+          .filter(
+            id =>
+              /^\d+$/.test(id)
+          );
+
 
       const results = [];
+
 
       for(
         const id of ids
@@ -1273,17 +1572,18 @@ app.get(
 
         try{
 
-          const show =
-            await getShowDetails(id);
+          const data =
+            await getShowDetails(
+              id
+            );
+
 
           results.push({
-
             id:
-              show.id,
+              Number(id),
 
             name:
-              show.name
-
+              data.name
           });
 
         }catch(error){
@@ -1300,21 +1600,23 @@ app.get(
 
       }
 
+
       res.json({
-        results:results
+        results:
+          results
       });
+
 
     }catch(error){
 
       console.error(
-        error.response
-          ? error.response.data
-          : error.message
+        error
       );
+
 
       res.status(500).json({
         error:
-          "Failed to load selected shows"
+          "Failed to load existing shows"
       });
 
     }
@@ -1329,84 +1631,27 @@ MANIFEST
 ====================================================
 */
 
-async function sendManifest(
-  req,
-  res,
+function buildManifest(
   config
 ){
 
+  const shows =
+    getShowsFromConfig(
+      config
+    );
+
   const rows =
-    getRowsFromConfig(config);
+    getRowsFromConfig(
+      config
+    );
 
-  const catalogs = [];
-
-  if(
-    rows.includes("myshows")
-  ){
-
-    catalogs.push({
-      type:"series",
-      id:"myshows",
-      name:"My Shows"
-    });
-
-  }
-
-  if(
-    rows.includes("whatsnext")
-  ){
-
-    catalogs.push({
-      type:"series",
-      id:"whatsnext",
-      name:"What's Next?"
-    });
-
-  }
-
-  if(
-    rows.includes("airingthisweek")
-  ){
-
-    catalogs.push({
-      type:"series",
-      id:"airingthisweek",
-      name:"Airing This Week"
-    });
-
-  }
-
-  if(
-    rows.includes("recentlyaired")
-  ){
-
-    catalogs.push({
-      type:"series",
-      id:"recentlyaired",
-      name:"Recently Aired"
-    });
-
-  }
-
-  if(
-    rows.includes("returningsoon")
-  ){
-
-    catalogs.push({
-      type:"series",
-      id:"returningsoon",
-      name:"Returning Soon"
-    });
-
-  }
-
-  res.json({
+  return {
 
     id:
       "com.nick1234.myshows",
 
     version:
-      "2.3.2",
+      "2.4.0",
 
     name:
       "My Shows",
@@ -1423,26 +1668,63 @@ async function sendManifest(
       "series"
     ],
 
-    behaviorHints:{
-      configurable:true
-    },
-
     catalogs:
-      catalogs
+      rows.map(
+        row => {
 
-  });
+          const names = {
+
+            myshows:
+              "My Shows",
+
+            whatsnext:
+              "What's Next?",
+
+            airingthisweek:
+              "Airing This Week",
+
+            recentlyaired:
+              "Recently Aired",
+
+            returningsoon:
+              "Returning Soon"
+
+          };
+
+          return {
+
+            type:
+              "series",
+
+            id:
+              row,
+
+            name:
+              names[row] || row
+
+          };
+
+        }
+      ),
+
+    behaviorHints:{
+      configurable:
+        true
+    }
+
+  };
 
 }
 
 
 app.get(
   "/manifest.json",
-  async (req,res) => {
+  (req,res) => {
 
-    await sendManifest(
-      req,
-      res,
-      null
+    res.json(
+      buildManifest(
+        null
+      )
     );
 
   }
@@ -1451,12 +1733,12 @@ app.get(
 
 app.get(
   "/:config/manifest.json",
-  async (req,res) => {
+  (req,res) => {
 
-    await sendManifest(
-      req,
-      res,
-      req.params.config
+    res.json(
+      buildManifest(
+        req.params.config
+      )
     );
 
   }
@@ -1465,7 +1747,7 @@ app.get(
 
 /*
 ====================================================
-CATALOG
+MY SHOWS
 ====================================================
 */
 
@@ -1477,17 +1759,6 @@ async function sendMyShows(
 
   try{
 
-    if(
-      !getRowsFromConfig(config)
-        .includes("myshows")
-    ){
-
-      return res.json({
-        metas:[]
-      });
-
-    }
-
     if(!TMDB_API_KEY){
 
       return res.status(500).json({
@@ -1497,80 +1768,175 @@ async function sendMyShows(
 
     }
 
-    const shows =
-      getShowsFromConfig(config);
 
-    const metas = [];
+    const shows =
+      getShowsFromConfig(
+        config
+      );
+
+
+    const items = [];
+
 
     for(
-      const show of shows
+      let i = 0;
+      i < shows.length;
+      i++
     ){
 
-      const data =
-        await getShowDetails(
-          show.tmdbId
-        );
+      const show =
+        shows[i];
 
-      let description =
-        data.overview || "";
 
-      if(
-        data.next_episode_to_air
-      ){
+      try{
+
+        const data =
+          await getShowDetails(
+            show.tmdbId
+          );
+
 
         const next =
           data.next_episode_to_air;
 
-        description =
-          "Next episode: " +
-          "S" +
-          next.season_number +
-          " E" +
-          next.episode_number +
-          " - " +
-          next.name +
-          " • " +
-          formatDate(
-            next.air_date
-          ) +
-          " — " +
-          description;
+
+        const last =
+          data.last_episode_to_air;
+
+
+        const nextTime =
+          next &&
+          next.air_date
+            ? new Date(
+                next.air_date +
+                "T00:00:00Z"
+              ).getTime()
+            : null;
+
+
+        const lastTime =
+          last &&
+          last.air_date
+            ? new Date(
+                last.air_date +
+                "T00:00:00Z"
+              ).getTime()
+            : null;
+
+
+        items.push({
+
+          data:
+            data,
+
+          originalIndex:
+            i,
+
+          nextTime:
+            nextTime,
+
+          lastTime:
+            lastTime
+
+        });
+
+      }catch(error){
+
+        console.error(
+          "Failed to load " +
+          show.tmdbId,
+          error.response
+            ? error.response.data
+            : error.message
+        );
 
       }
 
-      metas.push({
-
-        id:
-          "tmdb:" +
-          data.id,
-
-        type:
-          "series",
-
-        name:
-          data.name,
-
-        poster:
-          imageUrl(
-            data.poster_path
-          ),
-
-        background:
-          imageUrl(
-            data.backdrop_path,
-            "w1280"
-          ),
-
-        description:
-          description
-
-      });
-
     }
 
+
+    const sort =
+      getSortFromConfig(
+        config
+      );
+
+
+    sortMyShows(
+      items,
+      sort
+    );
+
+
+    const metas =
+      items.map(
+        item => {
+
+          const data =
+            item.data;
+
+
+          const next =
+            data.next_episode_to_air;
+
+
+          let description = "";
+
+
+          if(next){
+
+            description =
+              "Next Episode: S" +
+              next.season_number +
+              " E" +
+              next.episode_number +
+              " — " +
+              next.name +
+              "\n" +
+              "Airs: " +
+              formatDate(
+                next.air_date
+              );
+
+          }
+
+
+          return {
+
+            id:
+              "tmdb:" +
+              data.id,
+
+            type:
+              "series",
+
+            name:
+              data.name,
+
+            poster:
+              imageUrl(
+                data.poster_path
+              ),
+
+            background:
+              imageUrl(
+                data.backdrop_path,
+                "w1280"
+              ),
+
+            description:
+              description
+
+          };
+
+        }
+      );
+
+
     res.json({
-      metas:metas
+      metas:
+        metas
     });
+
 
   }catch(error){
 
@@ -1579,6 +1945,7 @@ async function sendMyShows(
         ? error.response.data
         : error.message
     );
+
 
     res.status(500).json({
       error:
@@ -1632,17 +1999,6 @@ async function sendAiringThisWeek(
 
   try{
 
-    if(
-      !getRowsFromConfig(config)
-        .includes("airingthisweek")
-    ){
-
-      return res.json({
-        metas:[]
-      });
-
-    }
-
     if(!TMDB_API_KEY){
 
       return res.status(500).json({
@@ -1652,75 +2008,99 @@ async function sendAiringThisWeek(
 
     }
 
+
     const shows =
-      getShowsFromConfig(config);
+      getShowsFromConfig(
+        config
+      );
+
 
     const metas = [];
+
 
     for(
       const show of shows
     ){
 
-      const data =
-        await getShowDetails(
-          show.tmdbId
+      try{
+
+        const data =
+          await getShowDetails(
+            show.tmdbId
+          );
+
+
+        if(
+          data.next_episode_to_air &&
+          isWithinNext7Days(
+            data.next_episode_to_air.air_date
+          )
+        ){
+
+          const next =
+            data.next_episode_to_air;
+
+
+          metas.push({
+
+            id:
+              "tmdb:" +
+              data.id,
+
+            type:
+              "series",
+
+            name:
+              data.name,
+
+            poster:
+              imageUrl(
+                data.poster_path
+              ),
+
+            background:
+              imageUrl(
+                data.backdrop_path,
+                "w1280"
+              ),
+
+            description:
+              "🔥 Airs " +
+              formatDate(
+                next.air_date
+              ) +
+              "\n\n" +
+              "Season " +
+              next.season_number +
+              ", Episode " +
+              next.episode_number +
+              ": " +
+              next.name
+
+          });
+
+        }
+
+      }catch(error){
+
+        console.error(
+          "Failed to load " +
+          show.tmdbId,
+          error.response
+            ? error.response.data
+            : error.message
         );
-
-      if(
-        data.next_episode_to_air &&
-        isWithinNext7Days(
-          data.next_episode_to_air.air_date
-        )
-      ){
-
-        const next =
-          data.next_episode_to_air;
-
-        metas.push({
-
-          id:
-            "tmdb:" +
-            data.id,
-
-          type:
-            "series",
-
-          name:
-            data.name,
-
-          poster:
-            imageUrl(
-              data.poster_path
-            ),
-
-          background:
-            imageUrl(
-              data.backdrop_path,
-              "w1280"
-            ),
-
-          description:
-            "🔥 Airs " +
-            formatDate(
-              next.air_date
-            ) +
-            " — " +
-            "Season " +
-            next.season_number +
-            ", Episode " +
-            next.episode_number +
-            ": " +
-            next.name
-
-        });
 
       }
 
     }
 
+
     res.json({
-      metas:metas
+      metas:
+        metas
     });
+
 
   }catch(error){
 
@@ -1729,6 +2109,7 @@ async function sendAiringThisWeek(
         ? error.response.data
         : error.message
     );
+
 
     res.status(500).json({
       error:
@@ -1770,7 +2151,7 @@ app.get(
 
 /*
 ====================================================
-WHAT'S NEXT
+WHAT'S NEXT?
 ====================================================
 */
 
@@ -1782,17 +2163,6 @@ async function sendWhatsNext(
 
   try{
 
-    if(
-      !getRowsFromConfig(config)
-        .includes("whatsnext")
-    ){
-
-      return res.json({
-        metas:[]
-      });
-
-    }
-
     if(!TMDB_API_KEY){
 
       return res.status(500).json({
@@ -1802,20 +2172,15 @@ async function sendWhatsNext(
 
     }
 
+
     const shows =
-      getShowsFromConfig(config);
+      getShowsFromConfig(
+        config
+      );
 
-    const today =
-      new Date();
-
-    today.setUTCHours(
-      0,
-      0,
-      0,
-      0
-    );
 
     const upcoming = [];
+
 
     for(
       const show of shows
@@ -1828,109 +2193,34 @@ async function sendWhatsNext(
             show.tmdbId
           );
 
-        let nextEpisode =
-          data.next_episode_to_air ||
-          null;
 
         if(
-          !nextEpisode ||
-          !nextEpisode.air_date
+          data.next_episode_to_air &&
+          data.next_episode_to_air.air_date
         ){
 
-          const seasons =
-            (data.seasons || [])
-              .filter(
-                s =>
-                  s.season_number > 0
-              )
-              .sort(
-                (a,b) =>
-                  a.season_number -
-                  b.season_number
-              );
+          upcoming.push({
 
-          for(
-            const season of seasons
-          ){
+            data:
+              data,
 
-            const seasonEpisodes =
-              await getSeasonEpisodes(
-                show.tmdbId,
-                season.season_number
-              );
+            episode:
+              data.next_episode_to_air,
 
-            const found =
-              seasonEpisodes
-                .filter(
-                  e =>
-                    e.air_date &&
-                    new Date(
-                      e.air_date +
-                      "T00:00:00Z"
-                    ) >= today
-                )
-                .sort(
-                  (a,b) =>
-                    a.air_date.localeCompare(
-                      b.air_date
-                    ) ||
-                    a.episode_number -
-                    b.episode_number
-                )[0];
+            airTime:
+              new Date(
+                data.next_episode_to_air.air_date +
+                "T00:00:00Z"
+              ).getTime()
 
-            if(found){
-
-              nextEpisode =
-                found;
-
-              break;
-
-            }
-
-          }
+          });
 
         }
-
-        if(
-          !nextEpisode ||
-          !nextEpisode.air_date
-        ){
-
-          continue;
-
-        }
-
-        const airDate =
-          new Date(
-            nextEpisode.air_date +
-            "T00:00:00Z"
-          );
-
-        if(
-          airDate < today
-        ){
-
-          continue;
-
-        }
-
-        upcoming.push({
-
-          data:
-            data,
-
-          episode:
-            nextEpisode,
-
-          airTime:
-            airDate.getTime()
-
-        });
 
       }catch(error){
 
         console.error(
-          "Failed to find next episode for TMDB " +
+          "Failed to load " +
           show.tmdbId,
           error.response
             ? error.response.data
@@ -1941,75 +2231,72 @@ async function sendWhatsNext(
 
     }
 
+
     upcoming.sort(
       (a,b) =>
         a.airTime -
         b.airTime
     );
 
+
+    const metas =
+      upcoming.map(
+        item => {
+
+          const data =
+            item.data;
+
+          const next =
+            item.episode;
+
+
+          return {
+
+            id:
+              "tmdb:" +
+              data.id,
+
+            type:
+              "series",
+
+            name:
+              data.name,
+
+            poster:
+              imageUrl(
+                data.poster_path
+              ),
+
+            background:
+              imageUrl(
+                data.backdrop_path,
+                "w1280"
+              ),
+
+            description:
+              "⏭️ Next Episode: S" +
+              next.season_number +
+              " E" +
+              next.episode_number +
+              " — " +
+              next.name +
+              "\n" +
+              "📅 Airs " +
+              formatDate(
+                next.air_date
+              )
+
+          };
+
+        }
+      );
+
+
     res.json({
-
       metas:
-        upcoming.map(
-          item => {
-
-            const data =
-              item.data;
-
-            const next =
-              item.episode;
-
-            return {
-
-              id:
-                "tmdb:" +
-                data.id,
-
-              type:
-                "series",
-
-              name:
-                data.name +
-                " — S" +
-                next.season_number +
-                " E" +
-                next.episode_number,
-
-              poster:
-                imageUrl(
-                  data.poster_path
-                ),
-
-              background:
-                imageUrl(
-                  data.backdrop_path,
-                  "w1280"
-                ),
-
-              description:
-                "Next episode: S" +
-                next.season_number +
-                " E" +
-                next.episode_number +
-                " — " +
-                next.name +
-                " • " +
-                formatDate(
-                  next.air_date
-                ) +
-                (
-                  next.overview
-                    ? " — " +
-                      next.overview
-                    : ""
-                )
-
-            };
-
-          }
-        )
-
+        metas
     });
+
 
   }catch(error){
 
@@ -2019,9 +2306,10 @@ async function sendWhatsNext(
         : error.message
     );
 
+
     res.status(500).json({
       error:
-        "Failed to load What's Next?"
+        "Failed to load What's Next"
     });
 
   }
@@ -2071,6 +2359,7 @@ function isRecentlyAired(
     return false;
   }
 
+
   const today =
     new Date();
 
@@ -2081,6 +2370,7 @@ function isRecentlyAired(
     0
   );
 
+
   const sevenDaysAgo =
     new Date(today);
 
@@ -2088,11 +2378,13 @@ function isRecentlyAired(
     sevenDaysAgo.getUTCDate() - 7
   );
 
+
   const target =
     new Date(
       dateString +
       "T00:00:00Z"
     );
+
 
   return (
     target >= sevenDaysAgo &&
@@ -2110,6 +2402,7 @@ function daysSince(
     return null;
   }
 
+
   const today =
     new Date();
 
@@ -2120,11 +2413,13 @@ function daysSince(
     0
   );
 
+
   const target =
     new Date(
       dateString +
       "T00:00:00Z"
     );
+
 
   return Math.round(
     (
@@ -2145,17 +2440,6 @@ async function sendRecentlyAired(
 
   try{
 
-    if(
-      !getRowsFromConfig(config)
-        .includes("recentlyaired")
-    ){
-
-      return res.json({
-        metas:[]
-      });
-
-    }
-
     if(!TMDB_API_KEY){
 
       return res.status(500).json({
@@ -2165,10 +2449,15 @@ async function sendRecentlyAired(
 
     }
 
-    const shows =
-      getShowsFromConfig(config);
 
-    const recentlyAired = [];
+    const shows =
+      getShowsFromConfig(
+        config
+      );
+
+
+    const aired = [];
+
 
     for(
       const show of shows
@@ -2181,46 +2470,41 @@ async function sendRecentlyAired(
             show.tmdbId
           );
 
-        const episode =
+
+        const last =
           data.last_episode_to_air;
 
+
         if(
-          !episode ||
-          !episode.air_date ||
-          !isRecentlyAired(
-            episode.air_date
+          last &&
+          last.air_date &&
+          isRecentlyAired(
+            last.air_date
           )
         ){
 
-          continue;
+          aired.push({
+
+            data:
+              data,
+
+            episode:
+              last,
+
+            airTime:
+              new Date(
+                last.air_date +
+                "T00:00:00Z"
+              ).getTime()
+
+          });
 
         }
-
-        recentlyAired.push({
-
-          data:
-            data,
-
-          episode:
-            episode,
-
-          daysAgo:
-            daysSince(
-              episode.air_date
-            ),
-
-          airTime:
-            new Date(
-              episode.air_date +
-              "T00:00:00Z"
-            ).getTime()
-
-        });
 
       }catch(error){
 
         console.error(
-          "Failed to load Recently Aired show " +
+          "Failed to load " +
           show.tmdbId,
           error.response
             ? error.response.data
@@ -2231,14 +2515,16 @@ async function sendRecentlyAired(
 
     }
 
-    recentlyAired.sort(
+
+    aired.sort(
       (a,b) =>
         b.airTime -
         a.airTime
     );
 
+
     const metas =
-      recentlyAired.map(
+      aired.map(
         item => {
 
           const data =
@@ -2248,12 +2534,16 @@ async function sendRecentlyAired(
             item.episode;
 
           const days =
-            item.daysAgo;
+            daysSince(
+              episode.air_date
+            );
+
 
           let dayText =
-            "📅 " +
+            "📅 Aired " +
             days +
             " days ago";
+
 
           if(days === 0){
 
@@ -2266,6 +2556,7 @@ async function sendRecentlyAired(
               "📅 Aired yesterday";
 
           }
+
 
           return {
 
@@ -2305,10 +2596,12 @@ async function sendRecentlyAired(
         }
       );
 
+
     res.json({
       metas:
         metas
     });
+
 
   }catch(error){
 
@@ -2317,6 +2610,7 @@ async function sendRecentlyAired(
         ? error.response.data
         : error.message
     );
+
 
     res.status(500).json({
       error:
@@ -2370,6 +2664,7 @@ function isReturningSoon(
     return false;
   }
 
+
   const today =
     new Date();
 
@@ -2380,11 +2675,13 @@ function isReturningSoon(
     0
   );
 
+
   const target =
     new Date(
       dateString +
       "T00:00:00Z"
     );
+
 
   const sevenDays =
     new Date(today);
@@ -2393,6 +2690,7 @@ function isReturningSoon(
     sevenDays.getUTCDate() +
     7
   );
+
 
   return target > sevenDays;
 
@@ -2407,6 +2705,7 @@ function daysUntil(
     return null;
   }
 
+
   const today =
     new Date();
 
@@ -2417,11 +2716,13 @@ function daysUntil(
     0
   );
 
+
   const target =
     new Date(
       dateString +
       "T00:00:00Z"
     );
+
 
   return Math.round(
     (
@@ -2442,17 +2743,6 @@ async function sendReturningSoon(
 
   try{
 
-    if(
-      !getRowsFromConfig(config)
-        .includes("returningsoon")
-    ){
-
-      return res.json({
-        metas:[]
-      });
-
-    }
-
     if(!TMDB_API_KEY){
 
       return res.status(500).json({
@@ -2462,10 +2752,15 @@ async function sendReturningSoon(
 
     }
 
+
     const shows =
-      getShowsFromConfig(config);
+      getShowsFromConfig(
+        config
+      );
+
 
     const returning = [];
+
 
     for(
       const show of shows
@@ -2478,46 +2773,46 @@ async function sendReturningSoon(
             show.tmdbId
           );
 
+
         const next =
           data.next_episode_to_air;
 
+
         if(
-          !next ||
-          !next.air_date ||
-          !isReturningSoon(
+          next &&
+          next.air_date &&
+          isReturningSoon(
             next.air_date
           )
         ){
 
-          continue;
+          returning.push({
+
+            data:
+              data,
+
+            episode:
+              next,
+
+            airTime:
+              new Date(
+                next.air_date +
+                "T00:00:00Z"
+              ).getTime(),
+
+            daysAway:
+              daysUntil(
+                next.air_date
+              )
+
+          });
 
         }
-
-        returning.push({
-
-          data:
-            data,
-
-          episode:
-            next,
-
-          daysAway:
-            daysUntil(
-              next.air_date
-            ),
-
-          airTime:
-            new Date(
-              next.air_date +
-              "T00:00:00Z"
-            ).getTime()
-
-        });
 
       }catch(error){
 
         console.error(
-          "Failed to load Returning Soon show " +
+          "Failed to load " +
           show.tmdbId,
           error.response
             ? error.response.data
@@ -2528,11 +2823,13 @@ async function sendReturningSoon(
 
     }
 
+
     returning.sort(
       (a,b) =>
         a.airTime -
         b.airTime
     );
+
 
     const metas =
       returning.map(
@@ -2547,10 +2844,12 @@ async function sendReturningSoon(
           const days =
             item.daysAway;
 
+
           let dayText =
             "📅 In " +
             days +
             " days";
+
 
           if(days === 1){
 
@@ -2558,6 +2857,7 @@ async function sendReturningSoon(
               "📅 In 1 day";
 
           }
+
 
           return {
 
@@ -2601,6 +2901,7 @@ async function sendReturningSoon(
 
         }
       );
+
 
     res.json({
       metas:
@@ -2675,8 +2976,10 @@ async function sendMeta(
 
     }
 
+
     const id =
       req.params.id;
+
 
     if(
       !id.startsWith("tmdb:")
@@ -2689,11 +2992,13 @@ async function sendMeta(
 
     }
 
+
     const tmdbId =
       id.replace(
         "tmdb:",
         ""
       );
+
 
     const data =
       await getShowDetails(
@@ -2709,6 +3014,7 @@ async function sendMeta(
 
     let episodes = [];
 
+
     const seasons =
       (data.seasons || [])
         .filter(
@@ -2721,6 +3027,7 @@ async function sendMeta(
             b.season_number
         );
 
+
     for(
       const season of seasons
     ){
@@ -2732,6 +3039,7 @@ async function sendMeta(
             tmdbId,
             season.season_number
           );
+
 
         episodes =
           episodes.concat(
@@ -2834,6 +3142,7 @@ async function sendMeta(
 
             let statusText = "";
 
+
             if(
               data.status === "Ended"
             ){
@@ -2855,6 +3164,7 @@ async function sendMeta(
 
               const next =
                 data.next_episode_to_air;
+
 
               statusText =
                 "🟢 Currently Airing" +
@@ -2897,6 +3207,7 @@ async function sendMeta(
 
             const today =
               new Date();
+
 
             today.setUTCHours(
               0,
@@ -2967,6 +3278,7 @@ async function sendMeta(
                     progressSeasonNumber
                 );
 
+
               const seasonAiredEpisodes =
                 seasonEpisodes.filter(
                   episode =>
@@ -2998,6 +3310,7 @@ async function sendMeta(
 
             const overview =
               data.overview || "";
+
 
             const detailsParts = [];
 
