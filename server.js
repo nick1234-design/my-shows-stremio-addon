@@ -4,58 +4,25 @@ const axios = require("axios");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const TMDB_API_KEY = process.env.TMDB_API_KEY;
+const TMDB_API_KEY =
+  process.env.TMDB_API_KEY;
+
+const TMDB_BASE =
+  "https://api.themoviedb.org/3";
+
+const TMDB_IMAGE =
+  "https://image.tmdb.org/t/p/";
 
 const DEFAULT_SHOWS = [
-  {
-    name: "The Drop: A Snowfall Saga",
-    tmdbId: 304842
-  },
-  {
-    name: "MobLand",
-    tmdbId: 247718
-  },
-  {
-    name: "Anna Pigeon",
-    tmdbId: 291350
-  }
+  292742,
+  291350,
+  247718,
+  304842,
+  153312,
+  202297,
+  253391,
+  302074
 ];
-
-function tmdbUrl(path) {
-  return "https://api.themoviedb.org/3" + path;
-}
-
-function imageUrl(path, size = "w500") {
-  if (!path) return undefined;
-  return "https://image.tmdb.org/t/p/" + size + path;
-}
-
-function formatDate(dateString) {
-  if (!dateString) return null;
-
-  const date = new Date(dateString + "T00:00:00Z");
-
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC"
-  });
-}
-
-function isWithinNext7Days(dateString) {
-  if (!dateString) return false;
-
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
-
-  const target = new Date(dateString + "T00:00:00Z");
-
-  const sevenDays = new Date(today);
-  sevenDays.setUTCDate(sevenDays.getUTCDate() + 7);
-
-  return target >= today && target <= sevenDays;
-}
 
 const DEFAULT_ROWS = [
   "myshows",
@@ -70,7 +37,8 @@ const ALL_ROWS = [
   "returningsoon"
 ];
 
-const DEFAULT_SORT = "myorder";
+const DEFAULT_SORT =
+  "myorder";
 
 const ALL_SORTS = [
   "myorder",
@@ -79,48 +47,112 @@ const ALL_SORTS = [
   "alphabetical"
 ];
 
-function getShowPartFromConfig(config) {
+function imageUrl(
+  path,
+  size = "w500"
+){
 
-  if (!config) {
-    return "";
+  if(!path){
+    return undefined;
   }
 
-  return String(config).split("~")[0];
+  return (
+    TMDB_IMAGE +
+    size +
+    path
+  );
 
 }
 
-function getRowsFromConfig(config) {
+function formatDate(
+  dateString
+){
 
-  if (
+  if(!dateString){
+    return null;
+  }
+
+  const date =
+    new Date(
+      dateString +
+      "T00:00:00Z"
+    );
+
+  if(
+    Number.isNaN(
+      date.getTime()
+    )
+  ){
+    return null;
+  }
+
+  return date.toLocaleDateString(
+    "en-US",
+    {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "UTC"
+    }
+  );
+
+}
+
+function getShowPartFromConfig(
+  config
+){
+
+  if(!config){
+    return "";
+  }
+
+  return String(
+    config
+  ).split("~")[0];
+
+}
+
+function getRowsFromConfig(
+  config
+){
+
+  if(
     !config ||
     !String(config).includes("~")
-  ) {
+  ){
     return DEFAULT_ROWS;
   }
 
+  const parts =
+    String(config).split("~");
+
   const rowPart =
-    String(config).split("~")[1] || "";
+    String(
+      parts[1] || ""
+    );
 
   const rows =
     rowPart
       .split(",")
-      .map(row => row.trim())
-      .filter(row =>
-        ALL_ROWS.includes(row)
+      .filter(
+        row =>
+          ALL_ROWS.includes(row)
       );
 
-  return rows.length > 0
+  return rows.length
     ? rows
     : DEFAULT_ROWS;
 
 }
 
-function getSortFromConfig(config) {
+function getSortFromConfig(
+  config
+){
 
-  if (
+  if(
     !config ||
     !String(config).includes("~")
-  ) {
+  ){
     return DEFAULT_SORT;
   }
 
@@ -128,7 +160,9 @@ function getSortFromConfig(config) {
     String(config).split("~");
 
   const sort =
-    String(parts[2] || "").trim();
+    String(
+      parts[2] || ""
+    ).trim();
 
   return ALL_SORTS.includes(sort)
     ? sort
@@ -136,108 +170,49 @@ function getSortFromConfig(config) {
 
 }
 
-function getShowsFromConfig(config) {
-
-  if (!config) {
-    return DEFAULT_SHOWS;
-  }
+function getShowsFromConfig(
+  config
+){
 
   const showPart =
-    getShowPartFromConfig(config);
+    getShowPartFromConfig(
+      config
+    );
+
+  if(!showPart){
+    return DEFAULT_SHOWS;
+  }
 
   const ids =
     showPart
       .split(",")
-      .map(id => id.trim())
-      .filter(id => /^\d+$/.test(id));
+      .map(
+        id => Number(id)
+      )
+      .filter(
+        id =>
+          Number.isFinite(id)
+      );
 
-  if (ids.length === 0) {
-    return DEFAULT_SHOWS;
-  }
-
-  return ids.map(id => ({
-    tmdbId: Number(id)
-  }));
-
-}
-
-function sortMyShows(items, sort) {
-
-  if (sort === "alphabetical") {
-
-    return items.sort(
-      (a, b) =>
-        a.data.name.localeCompare(
-          b.data.name
-        )
-    );
-
-  }
-
-  if (sort === "nextepisode") {
-
-    return items.sort(
-      (a, b) => {
-
-        const aTime =
-          a.nextTime ??
-          Number.MAX_SAFE_INTEGER;
-
-        const bTime =
-          b.nextTime ??
-          Number.MAX_SAFE_INTEGER;
-
-        return (
-          aTime - bTime ||
-          a.originalIndex -
-            b.originalIndex
-        );
-
-      }
-    );
-
-  }
-
-  if (sort === "recentlyaired") {
-
-    return items.sort(
-      (a, b) => {
-
-        const aTime =
-          a.lastTime ?? 0;
-
-        const bTime =
-          b.lastTime ?? 0;
-
-        return (
-          bTime - aTime ||
-          a.originalIndex -
-            b.originalIndex
-        );
-
-      }
-    );
-
-  }
-
-  return items.sort(
-    (a, b) =>
-      a.originalIndex -
-      b.originalIndex
-  );
+  return ids.length
+    ? ids
+    : DEFAULT_SHOWS;
 
 }
 
-async function getShowDetails(tmdbId) {
+async function tmdb(
+  path,
+  params = {}
+){
 
   const response =
     await axios.get(
-      tmdbUrl(
-        "/tv/" + tmdbId
-      ),
+      TMDB_BASE + path,
       {
-        params: {
-          api_key: TMDB_API_KEY
+        params:{
+          api_key:
+            TMDB_API_KEY,
+          ...params
         }
       }
     );
@@ -246,1378 +221,101 @@ async function getShowDetails(tmdbId) {
 
 }
 
+async function getShowDetails(
+  tmdbId
+){
+
+  return tmdb(
+    "/tv/" + tmdbId,
+    {
+      append_to_response:
+        "content_ratings"
+    }
+  );
+
+}
+
 async function getSeasonEpisodes(
   tmdbId,
   seasonNumber
-) {
+){
 
-  const response =
-    await axios.get(
-      tmdbUrl(
-        "/tv/" +
-        tmdbId +
-        "/season/" +
-        seasonNumber
-      ),
-      {
-        params: {
-          api_key: TMDB_API_KEY
-        }
-      }
+  const data =
+    await tmdb(
+      "/tv/" +
+      tmdbId +
+      "/season/" +
+      seasonNumber
     );
 
-  return response.data.episodes || [];
+  return data.episodes || [];
 
 }
 
-
-/*
-====================================================
-HOME
-====================================================
-*/
-
-app.get("/", (req, res) => {
-
-  res.send(`
-    <html>
-
-      <head>
-
-        <title>My Shows</title>
-
-        <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1"
-        >
-
-      </head>
-
-      <body style="
-        font-family:Arial;
-        background:#111;
-        color:white;
-        padding:30px;
-        text-align:center;
-      ">
-
-        <h1>📺 My Shows</h1>
-
-        <p>
-          Track your favorite TV shows in Stremio.
-        </p>
-
-        <a
-          href="/configure"
-          style="
-            display:inline-block;
-            padding:14px 22px;
-            background:#7c4dff;
-            color:white;
-            text-decoration:none;
-            border-radius:10px;
-            margin-top:15px;
-          "
-        >
-          Configure My Shows
-        </a>
-
-      </body>
-
-    </html>
-  `);
-
-});
-
-
-/*
-====================================================
-CUSTOM CONFIGURE PAGE
-====================================================
-*/
-
-async function sendConfigure(
-  req,
-  res,
-  config
-) {
-
-  const configString =
-    String(config || "");
-
-  const initialIds =
-    getShowPartFromConfig(
-      configString
-    )
-      .split(",")
-      .map(id => Number(id.trim()))
-      .filter(
-        id =>
-          Number.isInteger(id) &&
-          id > 0
-      );
-
-  const initialRows =
-    getRowsFromConfig(
-      configString
-    );
-
-  const initialSort =
-    getSortFromConfig(
-      configString
-    );
-
-  res.send(`
-<!DOCTYPE html>
-
-<html>
-
-<head>
-
-<meta
-  name="viewport"
-  content="width=device-width, initial-scale=1"
->
-
-<title>Configure My Shows</title>
-
-<style>
-
-body{
-  margin:0;
-  padding:20px;
-  background:#111;
-  color:white;
-  font-family:Arial,sans-serif;
-}
-
-.container{
-  max-width:700px;
-  margin:auto;
-}
-
-h1{
-  text-align:center;
-}
-
-.subtitle{
-  text-align:center;
-  color:#aaa;
-  margin-bottom:25px;
-}
-
-.searchBox{
-  display:flex;
-  gap:10px;
-  margin-bottom:20px;
-}
-
-.searchBox input{
-  flex:1;
-  padding:13px;
-  border-radius:8px;
-  border:1px solid #444;
-  background:#222;
-  color:white;
-  font-size:16px;
-}
-
-button{
-  padding:11px 15px;
-  border:0;
-  border-radius:8px;
-  background:#7c4dff;
-  color:white;
-  cursor:pointer;
-}
-
-button:disabled{
-  opacity:.5;
-}
-
-.section{
-  margin-top:25px;
-}
-
-.sectionTitle{
-  font-size:20px;
-  font-weight:bold;
-  margin-bottom:12px;
-}
-
-.message{
-  color:#999;
-  padding:15px;
-  background:#1b1b1b;
-  border-radius:8px;
-}
-
-.show{
-  display:flex;
-  align-items:center;
-  gap:12px;
-  padding:10px;
-  margin-bottom:8px;
-  background:#1b1b1b;
-  border-radius:10px;
-}
-
-.show img{
-  width:55px;
-  height:80px;
-  object-fit:cover;
-  border-radius:6px;
-}
-
-.showInfo{
-  flex:1;
-}
-
-.showTitle{
-  font-weight:bold;
-}
-
-.year{
-  color:#888;
-  margin-top:4px;
-}
-
-.selectedItem{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  padding:12px;
-  background:#1b1b1b;
-  border-radius:8px;
-  margin-bottom:8px;
-}
-
-.remove{
-  background:#444;
-}
-
-.rowsBox,
-.sortBox{
-  background:#1b1b1b;
-  padding:15px;
-  border-radius:10px;
-  margin-top:15px;
-}
-
-.rowOption{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  padding:10px 0;
-}
-
-.rowOption input{
-  width:20px;
-  height:20px;
-}
-
-.sortTitle{
-  font-size:18px;
-  font-weight:bold;
-}
-
-.sortDescription{
-  color:#999;
-  font-size:14px;
-  margin:7px 0 12px;
-  line-height:1.4;
-}
-
-.sortBox select{
-  width:100%;
-  padding:12px;
-  border-radius:8px;
-  border:1px solid #444;
-  background:#222;
-  color:white;
-  font-size:16px;
-}
-
-.install{
-  margin-top:30px;
-  text-align:center;
-}
-
-.installUrl{
-  word-break:break-all;
-  background:#1b1b1b;
-  padding:12px;
-  border-radius:8px;
-  margin-top:12px;
-  color:#aaa;
-}
-
-</style>
-
-</head>
-
-<body>
-
-<div class="container">
-
-<h1>📺 Configure My Shows</h1>
-
-<div class="subtitle">
-Add the shows you want to track.
-</div>
-
-<div class="searchBox">
-
-<input
-  id="search"
-  placeholder="Search for a TV show..."
->
-
-<button
-  onclick="searchShows()"
->
-Search
-</button>
-
-</div>
-
-<div
-  id="results"
-  class="section"
-></div>
-
-<div class="section">
-
-<div class="sectionTitle">
-My Shows
-</div>
-
-<div id="selectedShows">
-
-<div class="message">
-Loading your shows...
-</div>
-
-</div>
-
-</div>
-
-<div class="rowsBox">
-
-<div class="sectionTitle">
-Home Rows
-</div>
-
-<div class="rowOption">
-
-<input
-  type="checkbox"
-  id="row_myshows"
-  value="myshows"
->
-
-<label for="row_myshows">
-My Shows
-</label>
-
-</div>
-
-<div class="rowOption">
-
-<input
-  type="checkbox"
-  id="row_whatsnext"
-  value="whatsnext"
->
-
-<label for="row_whatsnext">
-What's Next?
-</label>
-
-</div>
-
-<div class="rowOption">
-
-<input
-  type="checkbox"
-  id="row_airingthisweek"
-  value="airingthisweek"
->
-
-<label for="row_airingthisweek">
-Airing This Week
-</label>
-
-</div>
-
-<div class="rowOption">
-
-<input
-  type="checkbox"
-  id="row_recentlyaired"
-  value="recentlyaired"
->
-
-<label for="row_recentlyaired">
-Recently Aired
-</label>
-
-</div>
-
-<div class="rowOption">
-
-<input
-  type="checkbox"
-  id="row_returningsoon"
-  value="returningsoon"
->
-
-<label for="row_returningsoon">
-Returning Soon
-</label>
-
-</div>
-
-</div>
-
-<div class="sortBox">
-
-<div class="sortTitle">
-Sort My Shows
-</div>
-
-<div class="sortDescription">
-Choose how your shows appear in the My Shows row. Other smart rows keep their own date-based order.
-</div>
-
-<select id="sortOrder">
-
-<option value="myorder">
-My Order
-</option>
-
-<option value="nextepisode">
-Next Episode
-</option>
-
-<option value="recentlyaired">
-Recently Aired
-</option>
-
-<option value="alphabetical">
-Alphabetical
-</option>
-
-</select>
-
-</div>
-
-<div class="install">
-
-<button
-  onclick="installAddon()"
->
-Generate My Addon
-</button>
-
-<div
-  id="installBox"
-  style="display:none"
->
-
-<div class="installUrl">
-<span id="installUrl"></span>
-</div>
-
-<br>
-
-<button
-  onclick="openStremio()"
->
-Open in Stremio
-</button>
-
-</div>
-
-</div>
-
-</div>
-
-<script>
-
-const initialIds =
-  ${JSON.stringify(initialIds)};
-
-const initialRows =
-  ${JSON.stringify(initialRows)};
-
-const initialSort =
-  ${JSON.stringify(initialSort)};
-
-let selected = [];
-
-function escapeHtml(text){
-
-  return String(text)
-    .replace(/&/g,"&amp;")
-    .replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;")
-    .replace(/"/g,"&quot;")
-    .replace(/'/g,"&#039;");
-
-}
-
-function escapeJs(text){
-
-  return String(text)
-    .replace(/\\\\/g,"\\\\\\\\")
-    .replace(/'/g,"\\\\'")
-    .replace(/"/g,"&quot;");
-
-}
-
-function initializeRows(){
-
-  const rows = [
-    "myshows",
-    "whatsnext",
-    "airingthisweek",
-    "recentlyaired",
-    "returningsoon"
-  ];
-
-  rows.forEach(row => {
-
-    const checkbox =
-      document.getElementById(
-        "row_" + row
-      );
-
-    if(checkbox){
-
-      checkbox.checked =
-        initialRows.includes(row);
-
-    }
-
-  });
-
-}
-
-function initializeSort(){
-
-  const select =
-    document.getElementById(
-      "sortOrder"
-    );
-
-  if(select){
-
-    select.value =
-      initialSort;
-
-  }
-
-}
-
-async function searchShows(){
-
-  const query =
-    document.getElementById(
-      "search"
-    ).value.trim();
-
-  if(!query){
-    return;
-  }
-
-  const results =
-    document.getElementById(
-      "results"
-    );
-
-  results.innerHTML =
-    '<div class="message">Searching...</div>';
-
-  try{
-
-    const response =
-      await fetch(
-        "/api/search?query=" +
-        encodeURIComponent(query)
-      );
-
-    const data =
-      await response.json();
-
-    if(
-      !data.results ||
-      data.results.length === 0
-    ){
-
-      results.innerHTML =
-        '<div class="message">No shows found.</div>';
-
-      return;
-
-    }
-
-    results.innerHTML =
-      data.results.map(show => {
-
-        const poster =
-          show.poster ||
-          "https://via.placeholder.com/65x95?text=No+Poster";
-
-        const alreadyAdded =
-          selected.some(
-            item =>
-              item.id === show.id
-          );
-
-        return \`
-          <div class="show">
-
-            <img
-              src="\${poster}"
-              alt=""
-            >
-
-            <div class="showInfo">
-
-              <div class="showTitle">
-                \${escapeHtml(show.name)}
-              </div>
-
-              <div class="year">
-                \${show.year || ""}
-              </div>
-
-            </div>
-
-            <button
-              onclick="addShow(\${show.id}, '\${escapeJs(show.name)}')"
-              \${alreadyAdded ? "disabled" : ""}
-            >
-              \${alreadyAdded ? "Added" : "Add"}
-            </button>
-
-          </div>
-        \`;
-
-      }).join("");
-
-  }catch(error){
-
-    console.error(error);
-
-    results.innerHTML =
-      '<div class="message">Search failed.</div>';
-
-  }
-
-}
-
-function addShow(id,name){
+function getNextEpisode(
+  data
+){
 
   if(
-    selected.some(
-      show =>
-        show.id === id
-    )
+    data &&
+    data.next_episode_to_air
   ){
-    return;
-  }
 
-  selected.push({
-    id:id,
-    name:name
-  });
-
-  renderSelected();
-
-  searchShows();
-
-}
-
-function removeShow(id){
-
-  selected =
-    selected.filter(
-      show =>
-        show.id !== id
-    );
-
-  renderSelected();
-
-  searchShows();
-
-}
-
-function renderSelected(){
-
-  const box =
-    document.getElementById(
-      "selectedShows"
-    );
-
-  if(selected.length === 0){
-
-    box.innerHTML =
-      '<div class="message">No shows added yet.</div>';
-
-    return;
+    return data.next_episode_to_air;
 
   }
 
-  box.innerHTML =
-    selected.map(show => {
-
-      return \`
-        <div class="selectedItem">
-
-          <span>
-            \${escapeHtml(show.name)}
-          </span>
-
-          <button
-            class="remove"
-            onclick="removeShow(\${show.id})"
-          >
-            Remove
-          </button>
-
-        </div>
-      \`;
-
-    }).join("");
+  return null;
 
 }
 
-function installAddon(){
-
-  if(selected.length === 0){
-
-    alert(
-      "Add at least one show first."
-    );
-
-    return;
-
-  }
-
-  const ids =
-    selected
-      .map(show => show.id)
-      .join(",");
-
-  const rows = [
-    "myshows",
-    "whatsnext",
-    "airingthisweek",
-    "recentlyaired",
-    "returningsoon"
-  ]
-    .filter(row => {
-
-      const checkbox =
-        document.getElementById(
-          "row_" + row
-        );
-
-      return checkbox &&
-        checkbox.checked;
-
-    })
-    .join(",");
-
-  const sort =
-    document.getElementById(
-      "sortOrder"
-    ).value;
-
-  const base =
-    window.location.origin;
-
-  const manifestUrl =
-    base +
-    "/" +
-    ids +
-    "~" +
-    rows +
-    "~" +
-    sort +
-    "/manifest.json";
-
-  const stremioUrl =
-    "stremio://" +
-    manifestUrl.substring(
-      "https://".length
-    );
-
-  document.getElementById(
-    "installUrl"
-  ).textContent =
-    manifestUrl;
-
-  document.getElementById(
-    "installBox"
-  ).style.display =
-    "block";
-
-  window.stremioInstallUrl =
-    stremioUrl;
-
-}
-
-function openStremio(){
+function getLastEpisode(
+  data
+){
 
   if(
-    !window.stremioInstallUrl
+    data &&
+    data.last_episode_to_air
   ){
-    return;
+
+    return data.last_episode_to_air;
+
   }
 
-  window.location.href =
-    window.stremioInstallUrl;
+  return null;
 
 }
 
-async function loadExistingShows(){
+function episodeDateTime(
+  episode
+){
 
-  if(initialIds.length === 0){
-
-    renderSelected();
-
-    return;
-
+  if(
+    !episode ||
+    !episode.air_date
+  ){
+    return null;
   }
 
-  try{
+  const time =
+    new Date(
+      episode.air_date +
+      "T00:00:00Z"
+    ).getTime();
 
-    const response =
-      await fetch(
-        "/api/shows?ids=" +
-        initialIds.join(",")
-      );
-
-    const data =
-      await response.json();
-
-    if(
-      data.results &&
-      Array.isArray(data.results)
-    ){
-
-      selected =
-        data.results.map(show => ({
-          id:show.id,
-          name:show.name
-        }));
-
-    }
-
-  }catch(error){
-
-    console.error(
-      "Failed to load existing shows",
-      error
-    );
-
-  }
-
-  renderSelected();
+  return Number.isFinite(time)
+    ? time
+    : null;
 
 }
 
-initializeRows();
+function isReturningSoon(
+  dateString
+){
 
-initializeSort();
-
-loadExistingShows();
-
-</script>
-
-</body>
-
-</html>
-  `);
-
-}
-
-
-/*
-====================================================
-CONFIGURE ROUTES
-====================================================
-*/
-
-app.get(
-  "/configure",
-  async (req,res) => {
-
-    await sendConfigure(
-      req,
-      res,
-      ""
-    );
-
+  if(!dateString){
+    return false;
   }
-);
-
-app.get(
-  "/:config/configure",
-  async (req,res) => {
-
-    await sendConfigure(
-      req,
-      res,
-      req.params.config
-    );
-
-  }
-);
-
-
-/*
-====================================================
-TMDB SEARCH
-====================================================
-*/
-
-app.get(
-  "/api/search",
-  async (req,res) => {
-
-    try{
-
-      if(!TMDB_API_KEY){
-
-        return res
-          .status(500)
-          .json({
-            error:
-              "TMDB_API_KEY is not configured"
-          });
-
-      }
-
-      const query =
-        String(
-          req.query.query || ""
-        ).trim();
-
-      if(!query){
-
-        return res.json({
-          results:[]
-        });
-
-      }
-
-      const response =
-        await axios.get(
-          tmdbUrl("/search/tv"),
-          {
-            params:{
-              api_key:
-                TMDB_API_KEY,
-              query:
-                query,
-              language:
-                "en-US",
-              include_adult:
-                false
-            }
-          }
-        );
-
-      const results =
-        (response.data.results || [])
-          .slice(0,20)
-          .map(show => {
-
-            return {
-
-              id:
-                show.id,
-
-              name:
-                show.name,
-
-              year:
-                show.first_air_date
-                  ? show.first_air_date.substring(
-                      0,
-                      4
-                    )
-                  : "",
-
-              poster:
-                imageUrl(
-                  show.poster_path
-                ),
-
-              overview:
-                show.overview || ""
-
-            };
-
-          });
-
-      res.json({
-        results:
-          results
-      });
-
-    }catch(error){
-
-      console.error(
-        error.response
-          ? error.response.data
-          : error.message
-      );
-
-      res
-        .status(500)
-        .json({
-          error:
-            "Failed to search TV shows"
-        });
-
-    }
-
-  }
-);
-
-
-/*
-====================================================
-LOAD EXISTING SHOWS
-====================================================
-*/
-
-app.get(
-  "/api/shows",
-  async (req,res) => {
-
-    try{
-
-      if(!TMDB_API_KEY){
-
-        return res
-          .status(500)
-          .json({
-            error:
-              "TMDB_API_KEY is not configured"
-          });
-
-      }
-
-      const ids =
-        String(
-          req.query.ids || ""
-        )
-          .split(",")
-          .map(id => id.trim())
-          .filter(
-            id =>
-              /^\d+$/.test(id)
-          );
-
-      const results = [];
-
-      for(
-        const id of ids
-      ){
-
-        try{
-
-          const data =
-            await getShowDetails(
-              Number(id)
-            );
-
-          results.push({
-
-            id:
-              Number(id),
-
-            name:
-              data.name ||
-              "Unknown Show"
-
-          });
-
-        }catch(error){
-
-          console.error(
-            "Failed to load show",
-            id,
-            error.message
-          );
-
-        }
-
-      }
-
-      res.json({
-        results:
-          results
-      });
-
-    }catch(error){
-
-      console.error(error);
-
-      res
-        .status(500)
-        .json({
-          error:
-            "Failed to load shows"
-        });
-
-    }
-
-  }
-);
-
-
-/*
-====================================================
-MANIFEST
-====================================================
-*/
-
-app.get(
-  "/manifest.json",
-  async (req,res) => {
-
-    const rows =
-      DEFAULT_ROWS;
-
-    const catalogs = [];
-
-    if(
-      rows.includes("myshows")
-    ){
-
-      catalogs.push({
-        type:"series",
-        id:"myshows",
-        name:"My Shows"
-      });
-
-    }
-
-    if(
-      rows.includes("whatsnext")
-    ){
-
-      catalogs.push({
-        type:"series",
-        id:"whatsnext",
-        name:"What's Next?"
-      });
-
-    }
-
-    if(
-      rows.includes("airingthisweek")
-    ){
-
-      catalogs.push({
-        type:"series",
-        id:"airingthisweek",
-        name:"Airing This Week"
-      });
-
-    }
-
-    if(
-      rows.includes("recentlyaired")
-    ){
-
-      catalogs.push({
-        type:"series",
-        id:"recentlyaired",
-        name:"Recently Aired"
-      });
-
-    }
-
-    if(
-      rows.includes("returningsoon")
-    ){
-
-      catalogs.push({
-        type:"series",
-        id:"returningsoon",
-        name:"Returning Soon"
-      });
-
-    }
-
-    res.json({
-
-      id:
-        "com.nick1234.myshows",
-
-      version:
-        "2.4.1",
-
-      name:
-        "My Shows",
-
-      description:
-        "Track upcoming episodes and add shows you're watching.",
-
-      resources:[
-        "catalog",
-        "meta"
-      ],
-
-      types:[
-        "series"
-      ],
-
-      behaviorHints:{
-        configurable:true
-      },
-
-      catalogs:
-        catalogs
-
-    });
-
-  }
-);
-
-
-/*
-====================================================
-PERSONALIZED MANIFEST
-====================================================
-*/
-
-app.get(
-  "/:config/manifest.json",
-  async (req,res) => {
-
-    const config =
-      req.params.config;
-
-    const rows =
-      getRowsFromConfig(
-        config
-      );
-
-    const catalogs = [];
-
-    if(
-      rows.includes("myshows")
-    ){
-
-      catalogs.push({
-        type:"series",
-        id:"myshows",
-        name:"My Shows"
-      });
-
-    }
-
-    if(
-      rows.includes("whatsnext")
-    ){
-
-      catalogs.push({
-        type:"series",
-        id:"whatsnext",
-        name:"What's Next?"
-      });
-
-    }
-
-    if(
-      rows.includes("airingthisweek")
-    ){
-
-      catalogs.push({
-        type:"series",
-        id:"airingthisweek",
-        name:"Airing This Week"
-      });
-
-    }
-
-    if(
-      rows.includes("recentlyaired")
-    ){
-
-      catalogs.push({
-        type:"series",
-        id:"recentlyaired",
-        name:"Recently Aired"
-      });
-
-    }
-
-    if(
-      rows.includes("returningsoon")
-    ){
-
-      catalogs.push({
-        type:"series",
-        id:"returningsoon",
-        name:"Returning Soon"
-      });
-
-    }
-
-    res.json({
-
-      id:
-        "com.nick1234.myshows",
-
-      version:
-        "2.4.1",
-
-      name:
-        "My Shows",
-
-      description:
-        "Track upcoming episodes and add shows you're watching.",
-
-      resources:[
-        "catalog",
-        "meta"
-      ],
-
-      types:[
-        "series"
-      ],
-
-      behaviorHints:{
-        configurable:true
-      },
-
-      catalogs:
-        catalogs
-
-    });
-
-  }
-);
-
-
-/*
-====================================================
-HELPERS
-====================================================
-*/
-
-function todayUTC(){
 
   const today =
     new Date();
@@ -1629,32 +327,21 @@ function todayUTC(){
     0
   );
 
-  return today;
+  const sevenDays =
+    new Date(today);
 
-}
-
-function dayDiff(
-  a,
-  b
-){
-
-  const first =
-    new Date(
-      a + "T00:00:00Z"
-    );
-
-  const second =
-    new Date(
-      b + "T00:00:00Z"
-    );
-
-  return Math.round(
-    (
-      first.getTime() -
-      second.getTime()
-    ) /
-    86400000
+  sevenDays.setUTCDate(
+    sevenDays.getUTCDate() +
+    7
   );
+
+  const target =
+    new Date(
+      dateString +
+      "T00:00:00Z"
+    );
+
+  return target > sevenDays;
 
 }
 
@@ -1667,7 +354,14 @@ function daysUntil(
   }
 
   const today =
-    todayUTC();
+    new Date();
+
+  today.setUTCHours(
+    0,
+    0,
+    0,
+    0
+  );
 
   const target =
     new Date(
@@ -1685,16 +379,104 @@ function daysUntil(
 
 }
 
-function daysSince(
+function sortMyShows(
+  items,
+  sort
+){
+
+  if(
+    sort ===
+    "alphabetical"
+  ){
+
+    return items.sort(
+      (a,b) =>
+        a.data.name.localeCompare(
+          b.data.name
+        )
+    );
+
+  }
+
+  if(
+    sort ===
+    "nextepisode"
+  ){
+
+    return items.sort(
+      (a,b) => {
+
+        const aTime =
+          a.nextTime ??
+          Number.MAX_SAFE_INTEGER;
+
+        const bTime =
+          b.nextTime ??
+          Number.MAX_SAFE_INTEGER;
+
+        return (
+          aTime - bTime ||
+          a.originalIndex -
+          b.originalIndex
+        );
+
+      }
+    );
+
+  }
+
+  if(
+    sort ===
+    "recentlyaired"
+  ){
+
+    return items.sort(
+      (a,b) => {
+
+        const aTime =
+          a.lastTime ??
+          0;
+
+        const bTime =
+          b.lastTime ??
+          0;
+
+        return (
+          bTime - aTime ||
+          a.originalIndex -
+          b.originalIndex
+        );
+
+      }
+    );
+
+  }
+
+  return items.sort(
+    (a,b) =>
+      a.originalIndex -
+      b.originalIndex
+  );
+
+}
+
+function dateLabel(
   dateString
 ){
 
   if(!dateString){
-    return null;
+    return "";
   }
 
   const today =
-    todayUTC();
+    new Date();
+
+  today.setUTCHours(
+    0,
+    0,
+    0,
+    0
+  );
 
   const target =
     new Date(
@@ -1702,52 +484,1402 @@ function daysSince(
       "T00:00:00Z"
     );
 
-  return Math.round(
+  const difference =
+    Math.round(
+      (
+        target.getTime() -
+        today.getTime()
+      ) /
+      86400000
+    );
+
+  if(
+    difference === 0
+  ){
+    return "today";
+  }
+
+  if(
+    difference === 1
+  ){
+    return "tomorrow";
+  }
+
+  if(
+    difference > 1 &&
+    difference <= 7
+  ){
+
+    return target.toLocaleDateString(
+      "en-US",
+      {
+        weekday:
+          "long",
+        timeZone:
+          "UTC"
+      }
+    );
+
+  }
+
+  return formatDate(
+    dateString
+  );
+
+}
+
+function daysAgoLabel(
+  dateString
+){
+
+  if(!dateString){
+    return "";
+  }
+
+  const today =
+    new Date();
+
+  today.setUTCHours(
+    0,
+    0,
+    0,
+    0
+  );
+
+  const target =
+    new Date(
+      dateString +
+      "T00:00:00Z"
+    );
+
+  const difference =
+    Math.round(
+      (
+        today.getTime() -
+        target.getTime()
+      ) /
+      86400000
+    );
+
+  if(
+    difference === 0
+  ){
+    return "today";
+  }
+
+  if(
+    difference === 1
+  ){
+    return "yesterday";
+  }
+
+  return (
+    difference +
+    " days ago"
+  );
+
+}
+
+function showSummary(
+  data
+){
+
+  const next =
+    getNextEpisode(
+      data
+    );
+
+  if(next){
+
+    return {
+      nextEpisode:
+        next,
+
+      nextTime:
+        episodeDateTime(
+          next
+        )
+    };
+
+  }
+
+  const last =
+    getLastEpisode(
+      data
+    );
+
+  return {
+    nextEpisode:
+      null,
+
+    nextTime:
+      null,
+
+    lastEpisode:
+      last,
+
+    lastTime:
+      episodeDateTime(
+        last
+      )
+  };
+
+}
+
+async function searchShows(
+  query
+){
+
+  const data =
+    await tmdb(
+      "/search/tv",
+      {
+        query
+      }
+    );
+
+  return data.results || [];
+
+}
+
+function configurePage(
+  configString
+){
+
+  const initialIds =
+    getShowsFromConfig(
+      configString
+    );
+
+  const initialRows =
+    getRowsFromConfig(
+      configString
+    );
+
+  const initialSort =
+    getSortFromConfig(
+      configString
+    );
+
+  const escapedConfig =
+    JSON.stringify(
+      configString || ""
+    );
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1"
+/>
+
+<title>
+My Shows
+</title>
+
+<style>
+
+body{
+  font-family:
+    Arial,
+    sans-serif;
+
+  background:
+    #111;
+
+  color:
+    white;
+
+  margin:
+    0;
+
+  padding:
+    20px;
+}
+
+.container{
+  max-width:
+    700px;
+
+  margin:
+    auto;
+}
+
+h1{
+  margin-top:
+    0;
+}
+
+.card{
+  background:
+    #1d1d1d;
+
+  border:
+    1px solid #333;
+
+  border-radius:
+    12px;
+
+  padding:
+    16px;
+
+  margin-bottom:
+    14px;
+}
+
+.show{
+  display:
+    flex;
+
+  align-items:
+    center;
+
+  gap:
+    12px;
+
+  padding:
+    10px 0;
+
+  border-bottom:
+    1px solid #333;
+}
+
+.show:last-child{
+  border-bottom:
+    none;
+}
+
+.showName{
+  flex:
+    1;
+}
+
+button,
+select,
+input{
+  font-size:
+    16px;
+
+  padding:
+    10px;
+
+  border-radius:
+    8px;
+
+  border:
+    1px solid #444;
+}
+
+button{
+  cursor:
+    pointer;
+}
+
+.searchRow{
+  display:
+    flex;
+
+  gap:
+    8px;
+}
+
+.searchRow input{
+  flex:
+    1;
+}
+
+.results{
+  margin-top:
+    12px;
+}
+
+.result{
+  display:
+    flex;
+
+  justify-content:
+    space-between;
+
+  align-items:
+    center;
+
+  padding:
+    10px 0;
+
+  border-bottom:
+    1px solid #333;
+}
+
+.switchRow{
+  display:
+    flex;
+
+  align-items:
+    center;
+
+  gap:
+    10px;
+
+  padding:
+    8px 0;
+}
+
+.sortBox{
+  margin-top:
+    16px;
+}
+
+.sortTitle{
+  font-weight:
+    bold;
+
+  margin-bottom:
+    6px;
+}
+
+.sortDescription{
+  color:
+    #aaa;
+
+  margin-bottom:
+    10px;
+
+  line-height:
+    1.4;
+}
+
+.status{
+  color:
+    #aaa;
+
+  font-size:
+    14px;
+}
+
+.remove{
+  background:
+    #333;
+
+  color:
+    white;
+}
+
+.add{
+  background:
+    #fff;
+
+  color:
+    #111;
+}
+
+.install{
+  width:
+    100%;
+
+  margin-top:
+    14px;
+
+  background:
+    #fff;
+
+  color:
+    #111;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div
+  class="container"
+>
+
+<h1>
+My Shows
+</h1>
+
+<div
+  class="card"
+>
+
+<strong>
+Your Shows
+</strong>
+
+<div
+  id="showList"
+>
+Loading...
+</div>
+
+</div>
+
+<div
+  class="card"
+>
+
+<strong>
+Add a Show
+</strong>
+
+<div
+  class="searchRow"
+>
+
+<input
+  id="search"
+  placeholder="Search TV shows..."
+/>
+
+<button
+  id="searchButton"
+  type="button"
+>
+Search
+</button>
+
+</div>
+
+<div
+  id="results"
+  class="results"
+></div>
+
+</div>
+
+<div
+  class="card"
+>
+
+<strong>
+Home Rows
+</strong>
+
+<div
+  class="switchRow"
+>
+
+<input
+  type="checkbox"
+  id="row-myshows"
+/>
+
+<label
+  for="row-myshows"
+>
+My Shows
+</label>
+
+</div>
+
+<div
+  class="switchRow"
+>
+
+<input
+  type="checkbox"
+  id="row-whatsnext"
+/>
+
+<label
+  for="row-whatsnext"
+>
+What's Next?
+</label>
+
+</div>
+
+<div
+  class="switchRow"
+>
+
+<input
+  type="checkbox"
+  id="row-airingthisweek"
+/>
+
+<label
+  for="row-airingthisweek"
+>
+Airing This Week
+</label>
+
+</div>
+
+<div
+  class="switchRow"
+>
+
+<input
+  type="checkbox"
+  id="row-recentlyaired"
+/>
+
+<label
+  for="row-recentlyaired"
+>
+Recently Aired
+</label>
+
+</div>
+
+<div
+  class="switchRow"
+>
+
+<input
+  type="checkbox"
+  id="row-returningsoon"
+/>
+
+<label
+  for="row-returningsoon"
+>
+Returning Soon
+</label>
+
+</div>
+
+<div
+  class="sortBox"
+>
+
+<div
+  class="sortTitle"
+>
+Sort My Shows
+</div>
+
+<div
+  class="sortDescription"
+>
+Choose how your shows appear in the My Shows row. Other smart rows keep their own date-based order.
+</div>
+
+<select
+  id="sortOrder"
+>
+
+<option
+  value="myorder"
+>
+My Order
+</option>
+
+<option
+  value="nextepisode"
+>
+Next Episode
+</option>
+
+<option
+  value="recentlyaired"
+>
+Recently Aired
+</option>
+
+<option
+  value="alphabetical"
+>
+Alphabetical
+</option>
+
+</select>
+
+</div>
+
+<button
+  class="install"
+  id="installButton"
+  type="button"
+>
+Install / Update Addon
+</button>
+
+</div>
+
+</div>
+
+<script>
+
+const initialIds =
+  ${JSON.stringify(
+    initialIds
+  )};
+
+const initialRows =
+  ${JSON.stringify(
+    initialRows
+  )};
+
+const initialSort =
+  ${JSON.stringify(
+    initialSort
+  )};
+
+const configString =
+  ${escapedConfig};
+
+let ids =
+  initialIds.slice();
+
+function renderShows(
+  shows
+){
+
+  const list =
+    document.getElementById(
+      "showList"
+    );
+
+  list.innerHTML =
+    "";
+
+  if(
+    !shows.length
+  ){
+
+    list.innerHTML =
+      "<div class='status'>No shows added yet.</div>";
+
+    return;
+
+  }
+
+  shows.forEach(
+    show => {
+
+      const row =
+        document.createElement(
+          "div"
+        );
+
+      row.className =
+        "show";
+
+      const name =
+        document.createElement(
+          "div"
+        );
+
+      name.className =
+        "showName";
+
+      name.textContent =
+        show.name ||
+        "Unknown Show";
+
+      const button =
+        document.createElement(
+          "button"
+        );
+
+      button.className =
+        "remove";
+
+      button.textContent =
+        "Remove";
+
+      button.type =
+        "button";
+
+      button.addEventListener(
+        "click",
+        () => {
+
+          ids =
+            ids.filter(
+              id =>
+                String(id) !==
+                String(show.id)
+            );
+
+          renderShows(
+            shows.filter(
+              item =>
+                String(item.id) !==
+                String(show.id)
+            )
+          );
+
+        }
+      );
+
+      row.appendChild(
+        name
+      );
+
+      row.appendChild(
+        button
+      );
+
+      list.appendChild(
+        row
+      );
+
+    }
+  );
+
+}
+
+async function loadShows(){
+
+  try{
+
+    const response =
+      await fetch(
+        "/api/shows?ids=" +
+        ids.join(",")
+      );
+
+    const data =
+      await response.json();
+
+    renderShows(
+      data.shows || []
+    );
+
+  }catch(error){
+
+    document.getElementById(
+      "showList"
+    ).textContent =
+      "Unable to load shows.";
+
+  }
+
+}
+
+function selectedRows(){
+
+  return ALL_ROWS
+    .filter(
+      row => {
+
+        const checkbox =
+          document.getElementById(
+            "row-" + row
+          );
+
+        return (
+          checkbox &&
+          checkbox.checked
+        );
+
+      }
+    );
+
+}
+
+const ALL_ROWS =
+  [
+    "myshows",
+    "whatsnext",
+    "airingthisweek",
+    "recentlyaired",
+    "returningsoon"
+  ];
+
+function installAddon(){
+
+  const rows =
+    selectedRows();
+
+  const selectedSort =
+    document.getElementById(
+      "sortOrder"
+    ).value;
+
+  const rowPart =
+    rows.length
+      ? rows.join(",")
+      : "myshows";
+
+  const addonConfig =
+    ids.join(",") +
+    "~" +
+    rowPart +
+    "~" +
+    selectedSort;
+
+  const base =
+    window.location.origin;
+
+  const manifestUrl =
+    base +
+    "/" +
+    addonConfig +
+    "/manifest.json";
+
+  const stremioUrl =
+    "stremio://"
+    +
+    manifestUrl.replace(
+      /^https?:\/\//,
+      ""
+    );
+
+  window.location.href =
+    stremioUrl;
+
+}
+
+async function search(){
+
+  const query =
+    document.getElementById(
+      "search"
+    ).value.trim();
+
+  const results =
+    document.getElementById(
+      "results"
+    );
+
+  if(!query){
+
+    results.innerHTML =
+      "";
+
+    return;
+
+  }
+
+  results.textContent =
+    "Searching...";
+
+  try{
+
+    const response =
+      await fetch(
+        "/api/search?query=" +
+        encodeURIComponent(
+          query
+        )
+      );
+
+    const data =
+      await response.json();
+
+    results.innerHTML =
+      "";
+
     (
-      today.getTime() -
-      target.getTime()
-    ) /
-    86400000
-  );
+      data.results ||
+      []
+    ).forEach(
+      show => {
 
-}
+        const row =
+          document.createElement(
+            "div"
+          );
 
-function isReturningSoon(
-  dateString
-){
+        row.className =
+          "result";
 
-  if(!dateString){
-    return false;
-  }
+        const title =
+          document.createElement(
+            "span"
+          );
 
-  const today =
-    todayUTC();
+        title.textContent =
+          show.name;
 
-  const sevenDays =
-    new Date(today);
+        const button =
+          document.createElement(
+            "button"
+          );
 
-  sevenDays.setUTCDate(
-    sevenDays.getUTCDate() +
-    7
-  );
+        button.className =
+          "add";
 
-  const target =
-    new Date(
-      dateString +
-      "T00:00:00Z"
+        button.type =
+          "button";
+
+        button.textContent =
+          "Add";
+
+        button.addEventListener(
+          "click",
+          () => {
+
+            if(
+              !ids.includes(
+                Number(show.id)
+              )
+            ){
+
+              ids.push(
+                Number(show.id)
+              );
+
+            }
+
+            loadShows();
+
+            button.textContent =
+              "Added";
+
+          }
+        );
+
+        row.appendChild(
+          title
+        );
+
+        row.appendChild(
+          button
+        );
+
+        results.appendChild(
+          row
+        );
+
+      }
     );
 
-  return target >
-    sevenDays;
+  }catch(error){
+
+    results.textContent =
+      "Search failed.";
+
+  }
 
 }
 
+document.getElementById(
+  "searchButton"
+).addEventListener(
+  "click",
+  search
+);
 
-/*
-====================================================
-MY SHOWS
-====================================================
-*/
+document.getElementById(
+  "search"
+).addEventListener(
+  "keydown",
+  event => {
+
+    if(
+      event.key ===
+      "Enter"
+    ){
+
+      search();
+
+    }
+
+  }
+);
+
+document.getElementById(
+  "installButton"
+).addEventListener(
+  "click",
+  installAddon
+);
+
+initialRows.forEach(
+  row => {
+
+    const checkbox =
+      document.getElementById(
+        "row-" + row
+      );
+
+    if(checkbox){
+      checkbox.checked =
+        true;
+    }
+
+  }
+);
+
+document.getElementById(
+  "sortOrder"
+).value =
+  initialSort;
+
+loadShows();
+
+</script>
+
+</body>
+</html>
+`;
+
+}
+
+app.get(
+  "/configure",
+  (
+    req,
+    res
+  ) => {
+
+    res.type(
+      "html"
+    );
+
+    res.send(
+      configurePage("")
+    );
+
+  }
+);
+
+app.get(
+  "/:config/configure",
+  (
+    req,
+    res
+  ) => {
+
+    res.type(
+      "html"
+    );
+
+    res.send(
+      configurePage(
+        req.params.config
+      )
+    );
+
+  }
+);
+
+app.get(
+  "/api/search",
+  async (
+    req,
+    res
+  ) => {
+
+    try{
+
+      const query =
+        String(
+          req.query.query ||
+          ""
+        ).trim();
+
+      if(!query){
+
+        return res.json({
+          results:[]
+        });
+
+      }
+
+      const results =
+        await searchShows(
+          query
+        );
+
+      res.json({
+        results:
+          results.map(
+            show => ({
+              id:
+                show.id,
+
+              name:
+                show.name,
+
+              poster:
+                imageUrl(
+                  show.poster_path
+                ),
+
+              overview:
+                show.overview ||
+                ""
+            })
+          )
+      });
+
+    }catch(error){
+
+      console.error(
+        "Search error",
+        error.message
+      );
+
+      res.status(500).json({
+        error:
+          "Search failed"
+      });
+
+    }
+
+  }
+);
+
+app.get(
+  "/api/shows",
+  async (
+    req,
+    res
+  ) => {
+
+    try{
+
+      const raw =
+        String(
+          req.query.ids ||
+          ""
+        );
+
+      const ids =
+        raw
+          .split(",")
+          .map(
+            id => Number(id)
+          )
+          .filter(
+            id =>
+              Number.isFinite(id)
+          );
+
+      const shows =
+        await Promise.all(
+          ids.map(
+            async id => {
+
+              try{
+
+                const data =
+                  await getShowDetails(
+                    id
+                  );
+
+                return {
+                  id,
+                  name:
+                    data.name ||
+                    "Unknown Show"
+                };
+
+              }catch(error){
+
+                return {
+                  id,
+                  name:
+                    "Unknown Show"
+                };
+
+              }
+
+            }
+          )
+        );
+
+      res.json({
+        shows
+      });
+
+    }catch(error){
+
+      console.error(
+        "Shows error",
+        error.message
+      );
+
+      res.status(500).json({
+        error:
+          "Unable to load shows"
+      });
+
+    }
+
+  }
+);
+
+function sendManifest(
+  req,
+  res,
+  config
+){
+
+  const ids =
+    getShowsFromConfig(
+      config
+    );
+
+  const rows =
+    getRowsFromConfig(
+      config
+    );
+
+  const catalogs =
+    [];
+
+  if(
+    rows.includes(
+      "myshows"
+    )
+  ){
+
+    catalogs.push({
+      type:
+        "series",
+
+      id:
+        "myshows",
+
+      name:
+        "My Shows"
+    });
+
+  }
+
+  if(
+    rows.includes(
+      "whatsnext"
+    )
+  ){
+
+    catalogs.push({
+      type:
+        "series",
+
+      id:
+        "whatsnext",
+
+      name:
+        "What's Next?"
+    });
+
+  }
+
+  if(
+    rows.includes(
+      "airingthisweek"
+    )
+  ){
+
+    catalogs.push({
+      type:
+        "series",
+
+      id:
+        "airingthisweek",
+
+      name:
+        "Airing This Week"
+    });
+
+  }
+
+  if(
+    rows.includes(
+      "recentlyaired"
+    )
+  ){
+
+    catalogs.push({
+      type:
+        "series",
+
+      id:
+        "recentlyaired",
+
+      name:
+        "Recently Aired"
+    });
+
+  }
+
+  if(
+    rows.includes(
+      "returningsoon"
+    )
+  ){
+
+    catalogs.push({
+      type:
+        "series",
+
+      id:
+        "returningsoon",
+
+      name:
+        "Returning Soon"
+    });
+
+  }
+
+  res.json({
+
+    id:
+      "com.nick1234.myshows",
+
+    version:
+      "2.4.1",
+
+    name:
+      "My Shows",
+
+    description:
+      "Track upcoming episodes and add shows you're watching.",
+
+    resources:[
+      "catalog",
+      "meta"
+    ],
+
+    types:[
+      "series"
+    ],
+
+    behaviorHints:{
+      configurable:
+        true
+    },
+
+    catalogs
+
+  });
+
+}
+
+app.get(
+  "/manifest.json",
+  (
+    req,
+    res
+  ) => {
+
+    sendManifest(
+      req,
+      res,
+      ""
+    );
+
+  }
+);
+
+app.get(
+  "/:config/manifest.json",
+  (
+    req,
+    res
+  ) => {
+
+    sendManifest(
+      req,
+      res,
+      req.params.config
+    );
+
+  }
+);
 
 async function sendMyShows(
   req,
@@ -1755,140 +1887,127 @@ async function sendMyShows(
   config
 ){
 
-  const shows =
-    getShowsFromConfig(
-      config
-    );
+  try{
 
-  const sort =
-    getSortFromConfig(
-      config
-    );
+    const ids =
+      getShowsFromConfig(
+        config
+      );
 
-  const items = [];
+    const sort =
+      getSortFromConfig(
+        config
+      );
 
-  for(
-    let index = 0;
-    index < shows.length;
-    index++
-  ){
+    const items =
+      [];
 
-    const show =
-      shows[index];
+    for(
+      let index = 0;
+      index < ids.length;
+      index++
+    ){
 
-    try{
+      const id =
+        ids[index];
 
-      const data =
-        await getShowDetails(
-          show.tmdbId
+      try{
+
+        const data =
+          await getShowDetails(
+            id
+          );
+
+        const summary =
+          showSummary(
+            data
+          );
+
+        items.push({
+
+          data:{
+            id:
+              "tmdb:" +
+              data.id,
+
+            type:
+              "series",
+
+            name:
+              data.name,
+
+            poster:
+              imageUrl(
+                data.poster_path
+              ),
+
+            background:
+              imageUrl(
+                data.backdrop_path,
+                "w1280"
+              ),
+
+            description:
+              data.overview ||
+              "",
+
+            releaseInfo:
+              data.first_air_date
+                ? data.first_air_date
+                : undefined
+
+          },
+
+          originalIndex:
+            index,
+
+          nextTime:
+            summary.nextTime,
+
+          lastTime:
+            summary.lastTime
+
+        });
+
+      }catch(error){
+
+        console.error(
+          "My show error",
+          id,
+          error.message
         );
 
-      let nextTime =
-        null;
-
-      let lastTime =
-        null;
-
-      if(
-        data.next_episode_to_air &&
-        data.next_episode_to_air.air_date
-      ){
-
-        nextTime =
-          new Date(
-            data.next_episode_to_air.air_date +
-            "T00:00:00Z"
-          ).getTime();
-
       }
-
-      if(
-        data.last_episode_to_air &&
-        data.last_episode_to_air.air_date
-      ){
-
-        lastTime =
-          new Date(
-            data.last_episode_to_air.air_date +
-            "T00:00:00Z"
-          ).getTime();
-
-      }
-
-      items.push({
-
-        data:{
-          id:
-            "tmdb:" +
-            data.id,
-
-          type:
-            "series",
-
-          name:
-            data.name,
-
-          poster:
-            imageUrl(
-              data.poster_path
-            ),
-
-          background:
-            imageUrl(
-              data.backdrop_path,
-              "original"
-            ),
-
-          description:
-            data.overview ||
-            ""
-        },
-
-        originalIndex:
-          index,
-
-        nextTime:
-          nextTime,
-
-        lastTime:
-          lastTime
-
-      });
-
-    }catch(error){
-
-      console.error(
-        "My Shows error",
-        show.tmdbId,
-        error.message
-      );
 
     }
 
+    sortMyShows(
+      items,
+      sort
+    );
+
+    res.json({
+      metas:
+        items.map(
+          item =>
+            item.data
+        )
+    });
+
+  }catch(error){
+
+    console.error(
+      "My Shows error",
+      error.message
+    );
+
+    res.status(500).json({
+      metas:[]
+    });
+
   }
 
-  sortMyShows(
-    items,
-    sort
-  );
-
-  res.json({
-
-    metas:
-      items.map(
-        item => item.data
-      )
-
-  });
-
 }
-
-
-/*
-====================================================
-AIRING THIS WEEK
-====================================================
-*/
 
 async function sendAiringThisWeek(
   req,
@@ -1896,130 +2015,136 @@ async function sendAiringThisWeek(
   config
 ){
 
-  const shows =
-    getShowsFromConfig(
-      config
-    );
+  try{
 
-  const metas = [];
-
-  for(
-    const show of shows
-  ){
-
-    try{
-
-      const data =
-        await getShowDetails(
-          show.tmdbId
-        );
-
-      if(
-        !data.next_episode_to_air ||
-        !data.next_episode_to_air.air_date
-      ){
-
-        continue;
-
-      }
-
-      if(
-        !isWithinNext7Days(
-          data.next_episode_to_air.air_date
-        )
-      ){
-
-        continue;
-
-      }
-
-      const episode =
-        data.next_episode_to_air;
-
-      metas.push({
-
-        id:
-          "tmdb:" +
-          data.id,
-
-        type:
-          "series",
-
-        name:
-          data.name,
-
-        poster:
-          imageUrl(
-            data.poster_path
-          ),
-
-        background:
-          imageUrl(
-            data.backdrop_path,
-            "original"
-          ),
-
-        description:
-          "📺 S" +
-          episode.season_number +
-          " E" +
-          episode.episode_number +
-          " — " +
-          (
-            episode.name ||
-            "Upcoming Episode"
-          ) +
-          "\n\n" +
-          "📅 Airs " +
-          formatDate(
-            episode.air_date
-          )
-
-      });
-
-    }catch(error){
-
-      console.error(
-        "Airing This Week error",
-        show.tmdbId,
-        error.message
+    const ids =
+      getShowsFromConfig(
+        config
       );
 
+    const metas =
+      [];
+
+    const today =
+      new Date();
+
+    today.setUTCHours(
+      0,
+      0,
+      0,
+      0
+    );
+
+    const weekEnd =
+      new Date(
+        today
+      );
+
+    weekEnd.setUTCDate(
+      weekEnd.getUTCDate() +
+      7
+    );
+
+    for(
+      const id of ids
+    ){
+
+      try{
+
+        const data =
+          await getShowDetails(
+            id
+          );
+
+        const next =
+          getNextEpisode(
+            data
+          );
+
+        if(
+          next &&
+          next.air_date
+        ){
+
+          const date =
+            new Date(
+              next.air_date +
+              "T00:00:00Z"
+            );
+
+          if(
+            date >= today &&
+            date <= weekEnd
+          ){
+
+            metas.push({
+
+              id:
+                "tmdb:" +
+                data.id,
+
+              type:
+                "series",
+
+              name:
+                data.name,
+
+              poster:
+                imageUrl(
+                  data.poster_path
+                ),
+
+              background:
+                imageUrl(
+                  data.backdrop_path,
+                  "w1280"
+                ),
+
+              description:
+                "📅 Airs " +
+                dateLabel(
+                  next.air_date
+                ),
+
+              releaseInfo:
+                next.air_date
+
+            });
+
+          }
+
+        }
+
+      }catch(error){
+
+        console.error(
+          "Airing this week error",
+          id,
+          error.message
+        );
+
+      }
+
     }
+
+    res.json({
+      metas
+    });
+
+  }catch(error){
+
+    console.error(
+      "Airing this week error",
+      error.message
+    );
+
+    res.status(500).json({
+      metas:[]
+    });
 
   }
 
-  metas.sort(
-    (a,b) => {
-
-      const aDate =
-        a.description.match(
-          /Airs (.+)/
-        );
-
-      const bDate =
-        b.description.match(
-          /Airs (.+)/
-        );
-
-      return 0;
-
-    }
-  );
-
-  res.json({
-    metas:
-      metas
-  });
-
 }
-
-
-/*
-====================================================
-WHAT'S NEXT
-====================================================
-*/
 
 async function sendWhatsNext(
   req,
@@ -2027,103 +2152,126 @@ async function sendWhatsNext(
   config
 ){
 
-  const shows =
-    getShowsFromConfig(
-      config
-    );
+  try{
 
-  const metas = [];
+    const ids =
+      getShowsFromConfig(
+        config
+      );
 
-  for(
-    const show of shows
-  ){
+    const metas =
+      [];
 
-    try{
+    for(
+      const id of ids
+    ){
 
-      const data =
-        await getShowDetails(
-          show.tmdbId
+      try{
+
+        const data =
+          await getShowDetails(
+            id
+          );
+
+        const next =
+          getNextEpisode(
+            data
+          );
+
+        if(
+          next &&
+          next.air_date
+        ){
+
+          metas.push({
+
+            id:
+              "tmdb:" +
+              data.id,
+
+            type:
+              "series",
+
+            name:
+              data.name,
+
+            poster:
+              imageUrl(
+                data.poster_path
+              ),
+
+            background:
+              imageUrl(
+                data.backdrop_path,
+                "w1280"
+              ),
+
+            description:
+              "📺 S" +
+              next.season_number +
+              " E" +
+              next.episode_number +
+              " — " +
+              (
+                next.name ||
+                "Episode"
+              ) +
+              "\n\n" +
+              "📅 " +
+              dateLabel(
+                next.air_date
+              ),
+
+            releaseInfo:
+              next.air_date
+
+          });
+
+        }
+
+      }catch(error){
+
+        console.error(
+          "What's next error",
+          id,
+          error.message
         );
-
-      if(
-        !data.next_episode_to_air ||
-        !data.next_episode_to_air.air_date
-      ){
-
-        continue;
 
       }
 
-      const episode =
-        data.next_episode_to_air;
-
-      metas.push({
-
-        id:
-          "tmdb:" +
-          data.id,
-
-        type:
-          "series",
-
-        name:
-          data.name,
-
-        poster:
-          imageUrl(
-            data.poster_path
-          ),
-
-        background:
-          imageUrl(
-            data.backdrop_path,
-            "original"
-          ),
-
-        description:
-          "▶️ Next Episode\n\n" +
-          "S" +
-          episode.season_number +
-          " E" +
-          episode.episode_number +
-          " — " +
-          (
-            episode.name ||
-            "Upcoming Episode"
-          ) +
-          "\n\n" +
-          "📅 " +
-          formatDate(
-            episode.air_date
-          )
-
-      });
-
-    }catch(error){
-
-      console.error(
-        "What's Next error",
-        show.tmdbId,
-        error.message
-      );
-
     }
+
+    metas.sort(
+      (a,b) =>
+        String(
+          a.releaseInfo ||
+          ""
+        ).localeCompare(
+          String(
+            b.releaseInfo ||
+            ""
+          )
+        )
+    );
+
+    res.json({
+      metas
+    });
+
+  }catch(error){
+
+    console.error(
+      "What's Next error",
+      error.message
+    );
+
+    res.status(500).json({
+      metas:[]
+    });
 
   }
 
-  res.json({
-    metas:
-      metas
-  });
-
 }
-
-
-/*
-====================================================
-RECENTLY AIRED
-====================================================
-*/
 
 async function sendRecentlyAired(
   req,
@@ -2131,143 +2279,146 @@ async function sendRecentlyAired(
   config
 ){
 
-  const shows =
-    getShowsFromConfig(
-      config
-    );
+  try{
 
-  const metas = [];
-
-  for(
-    const show of shows
-  ){
-
-    try{
-
-      const data =
-        await getShowDetails(
-          show.tmdbId
-        );
-
-      if(
-        !data.last_episode_to_air ||
-        !data.last_episode_to_air.air_date
-      ){
-
-        continue;
-
-      }
-
-      const airDate =
-        data.last_episode_to_air.air_date;
-
-      const days =
-        daysSince(
-          airDate
-        );
-
-      if(
-        days === null ||
-        days < 0 ||
-        days > 7
-      ){
-
-        continue;
-
-      }
-
-      const episode =
-        data.last_episode_to_air;
-
-      let relativeText =
-        "Aired " +
-        days +
-        " days ago";
-
-      if(days === 0){
-
-        relativeText =
-          "Aired today";
-
-      }else if(days === 1){
-
-        relativeText =
-          "Aired yesterday";
-
-      }
-
-      metas.push({
-
-        id:
-          "tmdb:" +
-          data.id,
-
-        type:
-          "series",
-
-        name:
-          data.name,
-
-        poster:
-          imageUrl(
-            data.poster_path
-          ),
-
-        background:
-          imageUrl(
-            data.backdrop_path,
-            "original"
-          ),
-
-        description:
-          "🆕 S" +
-          episode.season_number +
-          " E" +
-          episode.episode_number +
-          " — " +
-          (
-            episode.name ||
-            "Episode"
-          ) +
-          "\n\n" +
-          "📅 " +
-          relativeText
-
-      });
-
-    }catch(error){
-
-      console.error(
-        "Recently Aired error",
-        show.tmdbId,
-        error.message
+    const ids =
+      getShowsFromConfig(
+        config
       );
 
+    const metas =
+      [];
+
+    const today =
+      new Date();
+
+    today.setUTCHours(
+      0,
+      0,
+      0,
+      0
+    );
+
+    const sevenDaysAgo =
+      new Date(
+        today
+      );
+
+    sevenDaysAgo.setUTCDate(
+      sevenDaysAgo.getUTCDate() -
+      7
+    );
+
+    for(
+      const id of ids
+    ){
+
+      try{
+
+        const data =
+          await getShowDetails(
+            id
+          );
+
+        const last =
+          getLastEpisode(
+            data
+          );
+
+        if(
+          last &&
+          last.air_date
+        ){
+
+          const date =
+            new Date(
+              last.air_date +
+              "T00:00:00Z"
+            );
+
+          if(
+            date >= sevenDaysAgo &&
+            date <= today
+          ){
+
+            metas.push({
+
+              id:
+                "tmdb:" +
+                data.id,
+
+              type:
+                "series",
+
+              name:
+                data.name,
+
+              poster:
+                imageUrl(
+                  data.poster_path
+                ),
+
+              background:
+                imageUrl(
+                  data.backdrop_path,
+                  "w1280"
+                ),
+
+              description:
+                "🆕 S" +
+                last.season_number +
+                " E" +
+                last.episode_number +
+                " — " +
+                (
+                  last.name ||
+                  "Episode"
+                ) +
+                "\n\n" +
+                "📅 Aired " +
+                daysAgoLabel(
+                  last.air_date
+                ),
+
+              releaseInfo:
+                last.air_date
+
+            });
+
+          }
+
+        }
+
+      }catch(error){
+
+        console.error(
+          "Recently aired error",
+          id,
+          error.message
+        );
+
+      }
+
     }
+
+    res.json({
+      metas
+    });
+
+  }catch(error){
+
+    console.error(
+      "Recently aired error",
+      error.message
+    );
+
+    res.status(500).json({
+      metas:[]
+    });
 
   }
 
-  metas.sort(
-    (a,b) => {
-
-      return 0;
-
-    }
-  );
-
-  res.json({
-    metas:
-      metas
-  });
-
 }
-
-
-/*
-====================================================
-RETURNING SOON
-====================================================
-*/
 
 async function sendReturningSoon(
   req,
@@ -2275,128 +2426,145 @@ async function sendReturningSoon(
   config
 ){
 
-  const shows =
-    getShowsFromConfig(
-      config
-    );
+  try{
 
-  const metas = [];
-
-  for(
-    const show of shows
-  ){
-
-    try{
-
-      const data =
-        await getShowDetails(
-          show.tmdbId
-        );
-
-      if(
-        !data.next_episode_to_air ||
-        !data.next_episode_to_air.air_date
-      ){
-
-        continue;
-
-      }
-
-      const airDate =
-        data.next_episode_to_air.air_date;
-
-      if(
-        !isReturningSoon(
-          airDate
-        )
-      ){
-
-        continue;
-
-      }
-
-      const episode =
-        data.next_episode_to_air;
-
-      const days =
-        daysUntil(
-          airDate
-        );
-
-      metas.push({
-
-        id:
-          "tmdb:" +
-          data.id,
-
-        type:
-          "series",
-
-        name:
-          data.name,
-
-        poster:
-          imageUrl(
-            data.poster_path
-          ),
-
-        background:
-          imageUrl(
-            data.backdrop_path,
-            "original"
-          ),
-
-        description:
-          "🔄 Returning " +
-          formatDate(
-            airDate
-          ) +
-          "\n\n" +
-          "Season " +
-          episode.season_number +
-          " • Episode " +
-          episode.episode_number +
-          ": " +
-          (
-            episode.name ||
-            "Upcoming Episode"
-          ) +
-          "\n\n" +
-          "📅 In " +
-          days +
-          " days"
-
-      });
-
-    }catch(error){
-
-      console.error(
-        "Returning Soon error",
-        show.tmdbId,
-        error.message
+    const ids =
+      getShowsFromConfig(
+        config
       );
+
+    const metas =
+      [];
+
+    for(
+      const id of ids
+    ){
+
+      try{
+
+        const data =
+          await getShowDetails(
+            id
+          );
+
+        const next =
+          getNextEpisode(
+            data
+          );
+
+        if(
+          next &&
+          next.air_date &&
+          isReturningSoon(
+            next.air_date
+          )
+        ){
+
+          const days =
+            daysUntil(
+              next.air_date
+            );
+
+          metas.push({
+
+            id:
+              "tmdb:" +
+              data.id,
+
+            type:
+              "series",
+
+            name:
+              data.name,
+
+            poster:
+              imageUrl(
+                data.poster_path
+              ),
+
+            background:
+              imageUrl(
+                data.backdrop_path,
+                "w1280"
+              ),
+
+            description:
+              "🔄 Returning " +
+              formatDate(
+                next.air_date
+              ) +
+              "\n" +
+              "Season " +
+              next.season_number +
+              " • Episode " +
+              next.episode_number +
+              ": " +
+              (
+                next.name ||
+                "Episode"
+              ) +
+              "\n" +
+              "📅 In " +
+              days +
+              " days",
+
+            releaseInfo:
+              next.air_date
+
+          });
+
+        }
+
+      }catch(error){
+
+        console.error(
+          "Returning soon error",
+          id,
+          error.message
+        );
+
+      }
 
     }
 
-  }
+    metas.sort(
+      (a,b) =>
+        String(
+          a.releaseInfo ||
+          ""
+        ).localeCompare(
+          String(
+            b.releaseInfo ||
+            ""
+          )
+        )
+    );
 
-  res.json({
-    metas:
+    res.json({
       metas
-  });
+    });
+
+  }catch(error){
+
+    console.error(
+      "Returning soon error",
+      error.message
+    );
+
+    res.status(500).json({
+      metas:[]
+    });
+
+  }
 
 }
 
-
-/*
-====================================================
-PERSONALIZED CATALOG ROUTES
-====================================================
-*/
-
 app.get(
   "/:config/catalog/series/myshows.json",
-  async (req,res) => {
+  async (
+    req,
+    res
+  ) => {
 
     await sendMyShows(
       req,
@@ -2408,21 +2576,11 @@ app.get(
 );
 
 app.get(
-  "/:config/catalog/series/whatsnext.json",
-  async (req,res) => {
-
-    await sendWhatsNext(
-      req,
-      res,
-      req.params.config
-    );
-
-  }
-);
-
-app.get(
   "/:config/catalog/series/airingthisweek.json",
-  async (req,res) => {
+  async (
+    req,
+    res
+  ) => {
 
     await sendAiringThisWeek(
       req,
@@ -2434,8 +2592,27 @@ app.get(
 );
 
 app.get(
+  "/:config/catalog/series/whatsnext.json",
+  async (
+    req,
+    res
+  ) => {
+
+    await sendWhatsNext(
+      req,
+      res,
+      req.params.config
+    );
+
+  }
+);
+
+app.get(
   "/:config/catalog/series/recentlyaired.json",
-  async (req,res) => {
+  async (
+    req,
+    res
+  ) => {
 
     await sendRecentlyAired(
       req,
@@ -2448,7 +2625,10 @@ app.get(
 
 app.get(
   "/:config/catalog/series/returningsoon.json",
-  async (req,res) => {
+  async (
+    req,
+    res
+  ) => {
 
     await sendReturningSoon(
       req,
@@ -2459,16 +2639,12 @@ app.get(
   }
 );
 
-
-/*
-====================================================
-GENERIC CATALOG ROUTES
-====================================================
-*/
-
 app.get(
   "/catalog/series/myshows.json",
-  async (req,res) => {
+  async (
+    req,
+    res
+  ) => {
 
     await sendMyShows(
       req,
@@ -2480,21 +2656,11 @@ app.get(
 );
 
 app.get(
-  "/catalog/series/whatsnext.json",
-  async (req,res) => {
-
-    await sendWhatsNext(
-      req,
-      res,
-      ""
-    );
-
-  }
-);
-
-app.get(
   "/catalog/series/airingthisweek.json",
-  async (req,res) => {
+  async (
+    req,
+    res
+  ) => {
 
     await sendAiringThisWeek(
       req,
@@ -2506,8 +2672,27 @@ app.get(
 );
 
 app.get(
+  "/catalog/series/whatsnext.json",
+  async (
+    req,
+    res
+  ) => {
+
+    await sendWhatsNext(
+      req,
+      res,
+      ""
+    );
+
+  }
+);
+
+app.get(
   "/catalog/series/recentlyaired.json",
-  async (req,res) => {
+  async (
+    req,
+    res
+  ) => {
 
     await sendRecentlyAired(
       req,
@@ -2520,7 +2705,10 @@ app.get(
 
 app.get(
   "/catalog/series/returningsoon.json",
-  async (req,res) => {
+  async (
+    req,
+    res
+  ) => {
 
     await sendReturningSoon(
       req,
@@ -2530,13 +2718,6 @@ app.get(
 
   }
 );
-
-
-/*
-====================================================
-META
-====================================================
-*/
 
 async function sendMeta(
   req,
@@ -2648,7 +2829,8 @@ async function sendMeta(
         "🔴 Ended";
 
     }else if(
-      data.status === "Canceled"
+      data.status ===
+      "Canceled"
     ){
 
       statusText =
@@ -2662,46 +2844,44 @@ async function sendMeta(
         "🟢 Currently Airing";
 
       if(
-        data.next_episode_to_air.air_date
+        data.next_episode_to_air
+          .air_date
       ){
 
         statusText +=
           "\n📅 Next episode: " +
           formatDate(
-            data.next_episode_to_air.air_date
+            data.next_episode_to_air
+              .air_date
           );
 
       }
 
     }else if(
-      data.status === "Returning Series"
+      data.status ===
+      "Returning Series"
     ){
 
       statusText =
         "🔵 Returning Series";
 
     }else if(
-      data.status === "In Production"
+      data.status ===
+      "In Production"
     ){
 
       statusText =
         "🟡 In Production";
 
     }else if(
-      data.status === "Planned"
+      data.status ===
+      "Planned"
     ){
 
       statusText =
         "⚪ Planned";
 
     }
-
-
-    /*
-    ==================================================
-    SEASON-AWARE AIRING PROGRESS
-    ==================================================
-    */
 
     const today =
       new Date();
@@ -2757,10 +2937,12 @@ async function sendMeta(
 
     }
 
-    let progressText = "";
+    let progressText =
+      "";
 
     if(
-      progressSeasonNumber !== null
+      progressSeasonNumber !==
+      null
     ){
 
       const seasonEpisodes =
@@ -2797,7 +2979,8 @@ async function sendMeta(
 
     }
 
-    const detailsParts = [];
+    const detailsParts =
+      [];
 
     if(statusText){
 
@@ -2815,25 +2998,15 @@ async function sendMeta(
 
     }
 
-    if(data.overview){
+    if(
+      data.overview
+    ){
 
       detailsParts.push(
         data.overview
       );
 
     }
-
-    const description =
-      detailsParts.join(
-        "\n\n"
-      );
-
-
-    /*
-    ==================================================
-    META RESPONSE
-    ==================================================
-    */
 
     res.json({
 
@@ -2857,25 +3030,21 @@ async function sendMeta(
         background:
           imageUrl(
             data.backdrop_path,
-            "original"
-          ),
-
-        logo:
-          imageUrl(
-            data.logo_path,
-            "original"
+            "w1280"
           ),
 
         description:
-          description,
+          detailsParts.join(
+            "\n\n"
+          ),
 
         releaseInfo:
           data.first_air_date
-            ? data.first_air_date.substring(
-                0,
-                4
-              )
-            : "",
+            ? new Date(
+                data.first_air_date
+              ).getUTCFullYear()
+              .toString()
+            : undefined,
 
         genres:
           data.genres
@@ -2885,8 +3054,7 @@ async function sendMeta(
               )
             : [],
 
-        videos:
-          videos
+        videos
 
       }
 
@@ -2897,32 +3065,24 @@ async function sendMeta(
     console.error(
       "Meta error",
       tmdbId,
-      error.response
-        ? error.response.data
-        : error.message
+      error.message
     );
 
-    res
-      .status(500)
-      .json({
-        error:
-          "Failed to load show metadata"
-      });
+    res.status(500).json({
+      error:
+        "Unable to load metadata"
+    });
 
   }
 
 }
 
-
-/*
-====================================================
-META ROUTES
-====================================================
-*/
-
 app.get(
   "/meta/series/tmdb\\::tmdbId.json",
-  async (req,res) => {
+  async (
+    req,
+    res
+  ) => {
 
     await sendMeta(
       req,
@@ -2937,7 +3097,10 @@ app.get(
 
 app.get(
   "/:config/meta/series/tmdb\\::tmdbId.json",
-  async (req,res) => {
+  async (
+    req,
+    res
+  ) => {
 
     await sendMeta(
       req,
@@ -2949,13 +3112,6 @@ app.get(
 
   }
 );
-
-
-/*
-====================================================
-START SERVER
-====================================================
-*/
 
 app.listen(
   PORT,
