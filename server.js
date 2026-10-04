@@ -25,10 +25,7 @@ function tmdbUrl(path) {
 
 function imageUrl(path, size = "w500") {
   if (!path) return undefined;
-
-  return "https://image.tmdb.org/t/p/" +
-    size +
-    path;
+  return "https://image.tmdb.org/t/p/" + size + path;
 }
 
 function formatDate(dateString) {
@@ -52,7 +49,10 @@ function formatDate(dateString) {
 }
 
 function isWithinNext7Days(dateString) {
-  if (!dateString) return false;
+
+  if (!dateString) {
+    return false;
+  }
 
   const today =
     new Date();
@@ -74,7 +74,8 @@ function isWithinNext7Days(dateString) {
     new Date(today);
 
   sevenDays.setUTCDate(
-    sevenDays.getUTCDate() + 7
+    sevenDays.getUTCDate() +
+    7
   );
 
   return (
@@ -107,6 +108,7 @@ const ALL_SORTS = [
 ];
 
 function getShowPartFromConfig(config) {
+
   if (!config) {
     return "";
   }
@@ -116,6 +118,7 @@ function getShowPartFromConfig(config) {
 }
 
 function getRowsFromConfig(config) {
+
   if (
     !config ||
     !String(config).includes("~")
@@ -130,9 +133,12 @@ function getRowsFromConfig(config) {
   const rows =
     rowPart
       .split(",")
-      .map(row => row.trim())
-      .filter(row =>
-        ALL_ROWS.includes(row)
+      .map(
+        row => row.trim()
+      )
+      .filter(
+        row =>
+          ALL_ROWS.includes(row)
       );
 
   return rows.length > 0
@@ -141,6 +147,7 @@ function getRowsFromConfig(config) {
 }
 
 function getSortFromConfig(config) {
+
   if (
     !config ||
     !String(config).includes("~")
@@ -162,28 +169,37 @@ function getSortFromConfig(config) {
 }
 
 function getShowsFromConfig(config) {
+
   if (!config) {
     return DEFAULT_SHOWS;
   }
 
   const showPart =
-    getShowPartFromConfig(config);
+    getShowPartFromConfig(
+      config
+    );
 
   const ids =
     showPart
       .split(",")
-      .map(id => id.trim())
-      .filter(id =>
-        /^\d+$/.test(id)
+      .map(
+        id => id.trim()
+      )
+      .filter(
+        id =>
+          /^\d+$/.test(id)
       );
 
   if (ids.length === 0) {
     return DEFAULT_SHOWS;
   }
 
-  return ids.map(id => ({
-    tmdbId: Number(id)
-  }));
+  return ids.map(
+    id => ({
+      tmdbId:
+        Number(id)
+    })
+  );
 }
 
 function sortMyShows(
@@ -195,18 +211,21 @@ function sortMyShows(
     sort ===
     "alphabetical"
   ) {
+
     return items.sort(
       (a, b) =>
         a.data.name.localeCompare(
           b.data.name
         )
     );
+
   }
 
   if (
     sort ===
     "nextepisode"
   ) {
+
     return items.sort(
       (a, b) => {
 
@@ -224,14 +243,17 @@ function sortMyShows(
           a.originalIndex -
           b.originalIndex
         );
+
       }
     );
+
   }
 
   if (
     sort ===
     "recentlyaired"
   ) {
+
     return items.sort(
       (a, b) => {
 
@@ -247,8 +269,10 @@ function sortMyShows(
           a.originalIndex -
           b.originalIndex
         );
+
       }
     );
+
   }
 
   return items.sort(
@@ -306,19 +330,31 @@ async function getSeasonEpisodes(
   );
 }
 
+
+/*
+====================================================
+HOME
+====================================================
+*/
+
 app.get(
   "/",
   (req, res) => {
 
     res.send(`
       <html>
+
         <head>
-          <title>My Shows</title>
+
+          <title>
+            My Shows
+          </title>
 
           <meta
             name="viewport"
             content="width=device-width, initial-scale=1"
           >
+
         </head>
 
         <body style="
@@ -329,7 +365,9 @@ app.get(
           text-align:center;
         ">
 
-          <h1>📺 My Shows</h1>
+          <h1>
+            📺 My Shows
+          </h1>
 
           <p>
             Track your favorite TV shows in Stremio.
@@ -351,10 +389,19 @@ app.get(
           </a>
 
         </body>
+
       </html>
     `);
+
   }
 );
+
+
+/*
+====================================================
+CUSTOM CONFIGURE PAGE
+====================================================
+*/
 
 async function sendConfigure(
   req,
@@ -370,8 +417,10 @@ async function sendConfigure(
       configString
     )
       .split(",")
-      .map(id =>
-        Number(id.trim())
+      .map(
+        id => Number(
+          id.trim()
+        )
       )
       .filter(
         id =>
@@ -754,8 +803,7 @@ Generate My Addon
 
 <div class="installUrl">
 
-<span id="installUrl">
-</span>
+<span id="installUrl"></span>
 
 </div>
 
@@ -833,44 +881,31 @@ function renderSelected(){
   box.innerHTML =
     selected
       .map(
-        show => `
-
-          <div class="selectedItem">
-
-            <div>
-              <strong>
-                ${escapeHtml(
-                  show.name ||
-                  "Unknown Show"
-                )}
-              </strong>
-            </div>
-
-            <button
-              class="remove"
-              onclick="removeShow(${show.tmdbId})"
-            >
-              Remove
-            </button>
-
-          </div>
-
-        `
+        show =>
+          '<div class="selectedItem">' +
+          '<span>' +
+          escapeHtml(
+            show.name
+          ) +
+          '</span>' +
+          '<button class="remove" onclick="removeShow(' +
+          show.id +
+          ')">Remove</button>' +
+          '</div>'
       )
       .join("");
 
 }
 
 function addShow(
-  tmdbId,
+  id,
   name
 ){
 
   if(
     selected.some(
       show =>
-        Number(show.tmdbId) ===
-        Number(tmdbId)
+        show.id === id
     )
   ){
 
@@ -879,37 +914,39 @@ function addShow(
   }
 
   selected.push({
-    tmdbId:
-      Number(tmdbId),
-    name:
-      name
+    id:id,
+    name:name
   });
 
   renderSelected();
 
+  searchShows();
+
 }
 
-function removeShow(
-  tmdbId
-){
+function removeShow(id){
 
   selected =
     selected.filter(
       show =>
-        Number(show.tmdbId) !==
-        Number(tmdbId)
+        show.id !== id
     );
 
   renderSelected();
+
+  searchShows();
 
 }
 
 async function searchShows(){
 
   const query =
-    document.getElementById(
-      "search"
-    ).value.trim();
+    document
+      .getElementById(
+        "search"
+      )
+      .value
+      .trim();
 
   const results =
     document.getElementById(
@@ -956,67 +993,98 @@ async function searchShows(){
     results.innerHTML =
       data.results
         .map(
-          show => `
+          show => {
 
-            <div class="show">
+            const poster =
+              show.poster ||
+              "";
 
-              ${
-                show.poster
-                  ? `
-                    <img
-                      src="${show.poster}"
-                      alt=""
-                    >
-                  `
-                  : ""
-              }
+            const alreadyAdded =
+              selected.some(
+                item =>
+                  item.id ===
+                  show.id
+              );
 
-              <div class="showInfo">
+            return (
+              '<div class="show">' +
 
-                <div class="showTitle">
-                  ${escapeHtml(
-                    show.name
-                  )}
-                </div>
+              '<img src="' +
+              poster +
+              '" alt="">' +
 
-                <div class="year">
-                  ${escapeHtml(
-                    show.year ||
-                    ""
-                  )}
-                </div>
+              '<div class="showInfo">' +
 
-              </div>
+              '<div class="showTitle">' +
+              escapeHtml(
+                show.name
+              ) +
+              '</div>' +
 
-              <button
-                onclick="addShow(
-                  ${show.tmdbId},
-                  '${String(
-                    show.name
-                  )
-                    .replace(
-                      /'/g,
-                      "\\'"
-                    )}'
-                )"
-              >
-                Add
-              </button>
+              '<div class="year">' +
+              (
+                show.year ||
+                ""
+              ) +
+              '</div>' +
 
-            </div>
+              '</div>' +
 
-          `
+              '<button onclick="addShow(' +
+              show.id +
+              ', \'' +
+              escapeJs(
+                show.name
+              ) +
+              '\')" ' +
+
+              (
+                alreadyAdded
+                  ? 'disabled'
+                  : ''
+              ) +
+
+              '>' +
+
+              (
+                alreadyAdded
+                  ? 'Added'
+                  : 'Add'
+              ) +
+
+              '</button>' +
+
+              '</div>'
+            );
+
+          }
         )
         .join("");
 
   }catch(error){
 
-    console.error(error);
+    console.error(
+      error
+    );
 
     results.innerHTML =
       '<div class="message">Search failed.</div>';
 
   }
+
+}
+
+function escapeJs(text){
+
+  return String(text)
+    .replace(
+      /\\/g,
+      "\\\\"
+    )
+    .replace(
+      /'/g,
+      "\\'"
+    );
 
 }
 
@@ -1056,7 +1124,7 @@ async function loadInitialShows(){
       selected =
         data.shows.map(
           show => ({
-            tmdbId:
+            id:
               Number(
                 show.tmdbId
               ),
@@ -1069,15 +1137,18 @@ async function loadInitialShows(){
 
   }catch(error){
 
-    console.error(error);
+    console.error(
+      error
+    );
 
     selected =
       initialIds.map(
         id => ({
-          tmdbId:
+          id:
             Number(id),
           name:
-            "TMDB " + id
+            "TMDB " +
+            id
         })
       );
 
@@ -1092,28 +1163,33 @@ function initializeRows(){
   const rows =
     initialRows || [];
 
-  document
-    .querySelectorAll(
-      'input[type="checkbox"]'
-    )
-    .forEach(
-      checkbox => {
+  [
+    "myshows",
+    "whatsnext",
+    "airingthisweek",
+    "recentlyaired",
+    "returningsoon"
+  ].forEach(
+    row => {
+
+      const checkbox =
+        document.getElementById(
+          "row_" + row
+        );
+
+      if(checkbox){
 
         checkbox.checked =
-          rows.includes(
-            checkbox.value
-          );
+          rows.includes(row);
 
       }
-    );
+
+    }
+  );
 
 }
 
 function initializeSort(){
-
-  const sort =
-    initialSort ||
-    "myorder";
 
   const select =
     document.getElementById(
@@ -1123,7 +1199,8 @@ function initializeSort(){
   if(select){
 
     select.value =
-      sort;
+      initialSort ||
+      "myorder";
 
   }
 
@@ -1147,21 +1224,45 @@ function installAddon(){
     selected
       .map(
         show =>
-          show.tmdbId
+          show.id
       )
       .join(",");
 
   const rows =
-    Array.from(
-      document.querySelectorAll(
-        'input[type="checkbox"]:checked'
-      )
-    )
-      .map(
-        checkbox =>
-          checkbox.value
-      )
-      .join(",");
+    [
+      "myshows",
+      "whatsnext",
+      "airingthisweek",
+      "recentlyaired",
+      "returningsoon"
+    ]
+      .filter(
+        row => {
+
+          const checkbox =
+            document.getElementById(
+              "row_" + row
+            );
+
+          return (
+            checkbox &&
+            checkbox.checked
+          );
+
+        }
+      );
+
+  if(
+    rows.length === 0
+  ){
+
+    alert(
+      "Turn on at least one Home row."
+    );
+
+    return;
+
+  }
 
   const sort =
     document.getElementById(
@@ -1172,7 +1273,7 @@ function installAddon(){
   const config =
     ids +
     "~" +
-    rows +
+    rows.join(",") +
     "~" +
     sort;
 
@@ -1210,13 +1311,10 @@ function openStremio(){
 
   }
 
-  const manifestUrl =
-    window.generatedManifestUrl;
-
   window.location.href =
     "stremio://" +
-    manifestUrl.replace(
-      /^https?:\\/\\//,
+    window.generatedManifestUrl.replace(
+      /^https?:\/\//,
       ""
     );
 
@@ -1254,7 +1352,6 @@ loadInitialShows();
 
 </html>
   `);
-
 }
 
 app.get(
@@ -1282,6 +1379,13 @@ app.get(
 
   }
 );
+
+
+/*
+====================================================
+SEARCH
+====================================================
+*/
 
 app.get(
   "/api/search",
@@ -1373,6 +1477,13 @@ app.get(
   }
 );
 
+
+/*
+====================================================
+LOAD SHOWS
+====================================================
+*/
+
 app.get(
   "/api/shows",
   async (req,res) => {
@@ -1385,8 +1496,11 @@ app.get(
           ""
         )
           .split(",")
-          .map(id =>
-            Number(id.trim())
+          .map(
+            id =>
+              Number(
+                id.trim()
+              )
           )
           .filter(
             id =>
@@ -1450,6 +1564,13 @@ app.get(
   }
 );
 
+
+/*
+====================================================
+MANIFEST
+====================================================
+*/
+
 function buildManifest(
   config
 ){
@@ -1458,8 +1579,6 @@ function buildManifest(
     getRowsFromConfig(
       config
     );
-
-  const catalogs = [];
 
   const catalogNames = {
     myshows:
@@ -1474,23 +1593,21 @@ function buildManifest(
       "Returning Soon"
   };
 
-  for(
-    const row of rows
-  ){
-
-    catalogs.push({
-      type:
-        "series",
-      id:
-        row,
-      name:
-        catalogNames[row] ||
-        row
-    });
-
-  }
+  const catalogs =
+    rows.map(
+      row => ({
+        type:
+          "series",
+        id:
+          row,
+        name:
+          catalogNames[row] ||
+          row
+      })
+    );
 
   return {
+
     id:
       "com.nick1234.myshows",
 
@@ -1519,6 +1636,7 @@ function buildManifest(
 
     catalogs:
       catalogs
+
   };
 
 }
@@ -1546,6 +1664,13 @@ app.get(
 
   }
 );
+
+
+/*
+====================================================
+MY SHOWS
+====================================================
+*/
 
 async function sendMyShows(
   req,
@@ -1614,23 +1739,30 @@ async function sendMyShows(
       }
 
       items.push({
+
         data:{
+
           id:
             "tmdb:" +
             data.id,
+
           type:
             "series",
+
           name:
             data.name,
+
           poster:
             imageUrl(
               data.poster_path
             ),
+
           background:
             imageUrl(
               data.backdrop_path,
               "original"
             )
+
         },
 
         originalIndex:
@@ -1641,6 +1773,7 @@ async function sendMyShows(
 
         lastTime:
           lastTime
+
       });
 
     }catch(error){
@@ -1669,6 +1802,13 @@ async function sendMyShows(
   });
 
 }
+
+
+/*
+====================================================
+AIRING THIS WEEK
+====================================================
+*/
 
 async function sendAiringThisWeek(
   req,
@@ -1717,6 +1857,7 @@ async function sendAiringThisWeek(
         data.next_episode_to_air;
 
       metas.push({
+
         id:
           "tmdb:" +
           data.id,
@@ -1753,6 +1894,7 @@ async function sendAiringThisWeek(
             episode.name ||
             "Upcoming Episode"
           )
+
       });
 
     }catch(error){
@@ -1773,6 +1915,13 @@ async function sendAiringThisWeek(
   });
 
 }
+
+
+/*
+====================================================
+WHAT'S NEXT
+====================================================
+*/
 
 async function sendWhatsNext(
   req,
@@ -1811,6 +1960,7 @@ async function sendWhatsNext(
         data.next_episode_to_air;
 
       metas.push({
+
         id:
           "tmdb:" +
           data.id,
@@ -1847,6 +1997,7 @@ async function sendWhatsNext(
             episode.name ||
             "Upcoming Episode"
           )
+
       });
 
     }catch(error){
@@ -1875,76 +2026,12 @@ async function sendWhatsNext(
 
 }
 
-function isReturningSoon(
-  dateString
-){
 
-  if(!dateString){
-    return false;
-  }
-
-  const today =
-    new Date();
-
-  today.setUTCHours(
-    0,
-    0,
-    0,
-    0
-  );
-
-  const sevenDays =
-    new Date(today);
-
-  sevenDays.setUTCDate(
-    sevenDays.getUTCDate() +
-    7
-  );
-
-  const target =
-    new Date(
-      dateString +
-      "T00:00:00Z"
-    );
-
-  return target >
-    sevenDays;
-
-}
-
-function daysUntil(
-  dateString
-){
-
-  if(!dateString){
-    return null;
-  }
-
-  const today =
-    new Date();
-
-  today.setUTCHours(
-    0,
-    0,
-    0,
-    0
-  );
-
-  const target =
-    new Date(
-      dateString +
-      "T00:00:00Z"
-    );
-
-  return Math.round(
-    (
-      target.getTime() -
-      today.getTime()
-    ) /
-    86400000
-  );
-
-}
+/*
+====================================================
+RECENTLY AIRED
+====================================================
+*/
 
 async function sendRecentlyAired(
   req,
@@ -2043,6 +2130,7 @@ async function sendRecentlyAired(
       }
 
       metas.push({
+
         id:
           "tmdb:" +
           data.id,
@@ -2077,6 +2165,7 @@ async function sendRecentlyAired(
           "\n\n" +
           "📅 " +
           relativeText
+
       });
 
     }catch(error){
@@ -2101,6 +2190,84 @@ async function sendRecentlyAired(
     metas:
       metas
   });
+
+}
+
+
+/*
+====================================================
+RETURNING SOON
+====================================================
+*/
+
+function isReturningSoon(
+  dateString
+){
+
+  if(!dateString){
+    return false;
+  }
+
+  const today =
+    new Date();
+
+  today.setUTCHours(
+    0,
+    0,
+    0,
+    0
+  );
+
+  const sevenDays =
+    new Date(today);
+
+  sevenDays.setUTCDate(
+    sevenDays.getUTCDate() +
+    7
+  );
+
+  const target =
+    new Date(
+      dateString +
+      "T00:00:00Z"
+    );
+
+  return target >
+    sevenDays;
+
+}
+
+function daysUntil(
+  dateString
+){
+
+  if(!dateString){
+    return null;
+  }
+
+  const today =
+    new Date();
+
+  today.setUTCHours(
+    0,
+    0,
+    0,
+    0
+  );
+
+  const target =
+    new Date(
+      dateString +
+      "T00:00:00Z"
+    );
+
+  return Math.round(
+    (
+      target.getTime() -
+      today.getTime()
+    ) /
+    86400000
+  );
 
 }
 
@@ -2159,6 +2326,7 @@ async function sendReturningSoon(
         );
 
       metas.push({
+
         id:
           "tmdb:" +
           data.id,
@@ -2199,6 +2367,7 @@ async function sendReturningSoon(
           "📅 In " +
           days +
           " days"
+
       });
 
     }catch(error){
@@ -2219,6 +2388,13 @@ async function sendReturningSoon(
   });
 
 }
+
+
+/*
+====================================================
+CATALOG ROUTES
+====================================================
+*/
 
 app.get(
   "/:config/catalog/series/myshows.json",
@@ -2349,6 +2525,13 @@ app.get(
 
   }
 );
+
+
+/*
+====================================================
+META
+====================================================
+*/
 
 async function sendMeta(
   req,
@@ -2709,15 +2892,20 @@ async function sendMeta(
     res
       .status(500)
       .json({
-
         error:
           "Failed to load show metadata"
-
       });
 
   }
 
 }
+
+
+/*
+====================================================
+META ROUTES
+====================================================
+*/
 
 app.get(
   "/meta/series/tmdb\\::tmdbId.json",
@@ -2748,6 +2936,13 @@ app.get(
 
   }
 );
+
+
+/*
+====================================================
+START
+====================================================
+*/
 
 app.listen(
   PORT,
