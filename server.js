@@ -1,241 +1,360 @@
-const express = require("express");
-const axios = require("axios");
+const express=require('express');
+const axios=require('axios');
+const app=express();
+const PORT=process.env.PORT||3000;
+const TMDB_API_KEY=process.env.TMDB_API_KEY;
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-const TMDB_API_KEY = process.env.TMDB_API_KEY;
-
-const DEFAULT_SHOWS = [
-  {
-    name: "The Drop: A Snowfall Saga",
-    tmdbId: 304842
-  },
-  {
-    name: "MobLand",
-    tmdbId: 247718
-  },
-  {
-    name: "Anna Pigeon",
-    tmdbId: 291350
-  }
+const DEFAULT_SHOWS=[
+  {name:'The Drop: A Snowfall Saga',tmdbId:304842},
+  {name:'MobLand',tmdbId:247718},
+  {name:'Anna Pigeon',tmdbId:291350}
 ];
 
-function tmdbUrl(path) {
-  return "https://api.themoviedb.org/3" + path;
-}
+const DEFAULT_ROWS=['myshows','whatsnext'];
 
-function imageUrl(path, size = "w500") {
-  if (!path) return undefined;
-  return "https://image.tmdb.org/t/p/" + size + path;
-}
-
-function formatDate(dateString) {
-  if (!dateString) return null;
-
-  const date = new Date(dateString + "T00:00:00Z");
-
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC"
-  });
-}
-
-function isWithinNext7Days(dateString) {
-  if (!dateString) return false;
-
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
-
-  const target = new Date(dateString + "T00:00:00Z");
-
-  const sevenDays = new Date(today);
-  sevenDays.setUTCDate(sevenDays.getUTCDate() + 7);
-
-  return target >= today && target <= sevenDays;
-}
-
-const DEFAULT_ROWS = [
-  "myshows",
-  "whatsnext"
+const ALL_ROWS=[
+  'myshows',
+  'whatsnext',
+  'airingthisweek',
+  'recentlyaired',
+  'returningsoon'
 ];
 
-const ALL_ROWS = [
-  "myshows",
-  "whatsnext",
-  "airingthisweek",
-  "recentlyaired",
-  "returningsoon"
+const DEFAULT_SORT='myorder';
+
+const ALL_SORTS=[
+  'myorder',
+  'nextepisode',
+  'recentlyaired',
+  'alphabetical'
 ];
 
-const DEFAULT_SORT = "myorder";
+app.use((req,res,next)=>{
+  res.setHeader('Access-Control-Allow-Origin','*');
+  res.setHeader('Access-Control-Allow-Methods','GET,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers','Content-Type');
 
-const ALL_SORTS = [
-  "myorder",
-  "nextepisode",
-  "recentlyaired",
-  "alphabetical"
-];
+  if(req.method==='OPTIONS'){
+    return res.sendStatus(204);
+  }
 
-function getShowPartFromConfig(config) {
-  if (!config) return "";
-  return String(config).split("~")[0];
+  next();
+});
+
+function tmdbUrl(p){
+  return 'https://api.themoviedb.org/3'+p;
 }
 
-function getRowsFromConfig(config) {
-
-  if (
-    !config ||
-    !String(config).includes("~")
-  ) {
-    return DEFAULT_ROWS;
-  }
-
-  const rowPart =
-    String(config).split("~")[1] || "";
-
-  const rows =
-    rowPart
-      .split(",")
-      .map(row => row.trim())
-      .filter(row =>
-        ALL_ROWS.includes(row)
-      );
-
-  return rows.length > 0
-    ? rows
-    : DEFAULT_ROWS;
+function imageUrl(p,size='w500'){
+  return p
+    ? 'https://image.tmdb.org/t/p/'+size+p
+    : undefined;
 }
 
-function getSortFromConfig(config) {
+function formatDate(s){
 
-  if (!config || !String(config).includes("~")) {
-    return DEFAULT_SORT;
+  if(!s){
+    return null;
   }
 
-  const parts = String(config).split("~");
-  const sort = String(parts[2] || "").trim();
-
-  return ALL_SORTS.includes(sort)
-    ? sort
-    : DEFAULT_SORT;
-}
-
-function sortMyShows(items, sort) {
-
-  if (sort === "alphabetical") {
-    return items.sort((a,b) =>
-      a.data.name.localeCompare(b.data.name)
-    );
-  }
-
-  if (sort === "nextepisode") {
-    return items.sort((a,b) => {
-      const aTime =
-        a.nextTime ??
-        Number.MAX_SAFE_INTEGER;
-
-      const bTime =
-        b.nextTime ??
-        Number.MAX_SAFE_INTEGER;
-
-      return (
-        aTime -
-        bTime ||
-        a.originalIndex -
-        b.originalIndex
-      );
-    });
-  }
-
-  if (sort === "recentlyaired") {
-    return items.sort((a,b) => {
-
-      const aTime =
-        a.lastTime ?? 0;
-
-      const bTime =
-        b.lastTime ?? 0;
-
-      return (
-        bTime -
-        aTime ||
-        a.originalIndex -
-        b.originalIndex
-      );
-
-    });
-  }
-
-  return items.sort(
-    (a,b) =>
-      a.originalIndex -
-      b.originalIndex
+  return new Date(
+    s+'T00:00:00Z'
+  ).toLocaleDateString(
+    'en-US',
+    {
+      month:'short',
+      day:'numeric',
+      year:'numeric',
+      timeZone:'UTC'
+    }
   );
 }
 
-function getShowsFromConfig(config) {
+function todayUTC(){
 
-  if (!config) {
-    return DEFAULT_SHOWS;
-  }
+  const d=new Date();
 
-  const showPart =
-    getShowPartFromConfig(config);
+  d.setUTCHours(
+    0,
+    0,
+    0,
+    0
+  );
 
-  const ids =
-    showPart
-      .split(",")
-      .map(id => id.trim())
-      .filter(id => /^\d+$/.test(id));
-
-  if (ids.length === 0) {
-    return DEFAULT_SHOWS;
-  }
-
-  return ids.map(id => ({
-    tmdbId: Number(id)
-  }));
+  return d;
 }
 
-async function getShowDetails(tmdbId) {
+function dayDiff(a,b){
 
-  const response =
+  return Math.round(
+    (
+      new Date(
+        a+'T00:00:00Z'
+      ).getTime() -
+      new Date(
+        b+'T00:00:00Z'
+      ).getTime()
+    ) / 86400000
+  );
+
+}
+
+function isWithinNext7Days(s){
+
+  if(!s){
+    return false;
+  }
+
+  const t=todayUTC();
+
+  const x=new Date(
+    s+'T00:00:00Z'
+  );
+
+  const e=new Date(t);
+
+  e.setUTCDate(
+    e.getUTCDate()+7
+  );
+
+  return x>=t && x<=e;
+}
+
+function isRecentlyAired(s){
+
+  if(!s){
+    return false;
+  }
+
+  const t=todayUTC();
+
+  const x=new Date(
+    s+'T00:00:00Z'
+  );
+
+  const d=new Date(t);
+
+  d.setUTCDate(
+    d.getUTCDate()-7
+  );
+
+  return x>=d && x<=t;
+}
+
+function isReturningSoon(s){
+
+  if(!s){
+    return false;
+  }
+
+  const t=todayUTC();
+
+  const x=new Date(
+    s+'T00:00:00Z'
+  );
+
+  const e=new Date(t);
+
+  e.setUTCDate(
+    e.getUTCDate()+7
+  );
+
+  return x>e;
+}
+
+function daysUntil(s){
+
+  if(!s){
+    return null;
+  }
+
+  return dayDiff(
+    new Date(todayUTC())
+      .toISOString()
+      .slice(0,10),
+    s
+  );
+}
+
+function getShowPart(config){
+
+  return config
+    ? String(config).split('~')[0]
+    : '';
+}
+
+function getRowsFromConfig(config){
+
+  if(
+    !config ||
+    !String(config).includes('~')
+  ){
+    return DEFAULT_ROWS;
+  }
+
+  const r=
+    (
+      String(config).split('~')[1] ||
+      ''
+    )
+      .split(',')
+      .map(x=>x.trim())
+      .filter(x=>ALL_ROWS.includes(x));
+
+  return r.length
+    ? r
+    : DEFAULT_ROWS;
+}
+
+function getSortFromConfig(config){
+
+  if(
+    !config ||
+    !String(config).includes('~')
+  ){
+    return DEFAULT_SORT;
+  }
+
+  const s=
+    String(config)
+      .split('~')[2] ||
+      '';
+
+  return ALL_SORTS.includes(
+    s.trim()
+  )
+    ? s.trim()
+    : DEFAULT_SORT;
+}
+
+function getShowsFromConfig(config){
+
+  if(!config){
+    return DEFAULT_SHOWS;
+  }
+
+  const ids=
+    getShowPart(config)
+      .split(',')
+      .map(x=>x.trim())
+      .filter(
+        x=>/^\d+$/.test(x)
+      );
+
+  return ids.length
+    ? ids.map(
+        id=>({
+          tmdbId:Number(id)
+        })
+      )
+    : DEFAULT_SHOWS;
+}
+
+async function getShowDetails(id){
+
+  const r=
     await axios.get(
-      tmdbUrl("/tv/" + tmdbId),
+      tmdbUrl('/tv/'+id),
       {
-        params: {
-          api_key: TMDB_API_KEY
+        params:{
+          api_key:TMDB_API_KEY
         }
       }
     );
 
-  return response.data;
+  return r.data;
 }
 
 async function getSeasonEpisodes(
-  tmdbId,
-  seasonNumber
-) {
+  id,
+  n
+){
 
-  const response =
+  const r=
     await axios.get(
       tmdbUrl(
-        "/tv/" +
-        tmdbId +
-        "/season/" +
-        seasonNumber
+        '/tv/'+
+        id+
+        '/season/'+
+        n
       ),
       {
-        params: {
-          api_key: TMDB_API_KEY
+        params:{
+          api_key:TMDB_API_KEY
         }
       }
     );
 
-  return response.data.episodes || [];
+  return r.data.episodes || [];
+}
+
+
+/*
+====================================================
+SMART SORTING
+====================================================
+*/
+
+function sortMyShows(
+  items,
+  sort
+){
+
+  if(sort==='alphabetical'){
+
+    return items.sort(
+      (a,b)=>
+        a.data.name.localeCompare(
+          b.data.name
+        ) ||
+        a.originalIndex-
+        b.originalIndex
+    );
+
+  }
+
+  if(sort==='nextepisode'){
+
+    return items.sort(
+      (a,b)=>
+        (
+          a.nextTime ??
+          Number.MAX_SAFE_INTEGER
+        ) -
+        (
+          b.nextTime ??
+          Number.MAX_SAFE_INTEGER
+        ) ||
+        a.originalIndex-
+        b.originalIndex
+    );
+
+  }
+
+  if(sort==='recentlyaired'){
+
+    return items.sort(
+      (a,b)=>
+        (
+          b.lastTime ??
+          0
+        ) -
+        (
+          a.lastTime ??
+          0
+        ) ||
+        a.originalIndex-
+        b.originalIndex
+    );
+
+  }
+
+  return items.sort(
+    (a,b)=>
+      a.originalIndex-
+      b.originalIndex
+  );
+
 }
 
 
@@ -245,62 +364,26 @@ HOME
 ====================================================
 */
 
-app.get("/", (req, res) => {
-
-  res.send(`
-    <html>
-
-      <head>
-
-        <title>My Shows</title>
-
-        <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1"
-        >
-
-      </head>
-
-      <body style="
-        font-family:Arial;
-        background:#111;
-        color:white;
-        padding:30px;
-        text-align:center;
-      ">
-
-        <h1>📺 My Shows</h1>
-
-        <p>
-          Track your favorite TV shows in Stremio.
-        </p>
-
-        <a
-          href="/configure"
-          style="
-            display:inline-block;
-            padding:14px 22px;
-            background:#7c4dff;
-            color:white;
-            text-decoration:none;
-            border-radius:10px;
-            margin-top:15px;
-          "
-        >
-          Configure My Shows
-        </a>
-
-      </body>
-
-    </html>
-  `);
-
-});
+app.get(
+  '/',
+  (req,res)=>
+    res.send(
+      '<html>'+
+      '<body style="font-family:Arial;background:#111;color:white;padding:30px;text-align:center">'+
+      '<h1>📺 My Shows</h1>'+
+      '<p>Track your favorite TV shows in Stremio.</p>'+
+      '<a href="/configure" style="display:inline-block;padding:14px 22px;background:#7c4dff;color:white;text-decoration:none;border-radius:10px">'+
+      'Configure My Shows'+
+      '</a>'+
+      '</body>'+
+      '</html>'
+    )
+);
 
 
 /*
 ====================================================
-CUSTOM CONFIGURE PAGE
+CONFIGURE
 ====================================================
 */
 
@@ -308,43 +391,44 @@ async function sendConfigure(
   req,
   res,
   config
-) {
+){
 
-  const configString =
-    String(config || "");
+  const configString=
+    String(config||'');
 
-  const initialIds =
+  const initialIds=
     getShowPartFromConfig(
       configString
     )
-      .split(",")
-      .map(id => Number(id.trim()))
+      .split(',')
+      .map(
+        x=>Number(x.trim())
+      )
       .filter(
-        id =>
-          Number.isInteger(id) &&
-          id > 0
+        x=>
+          Number.isInteger(x) &&
+          x>0
       );
 
-  const initialRows =
+  const initialRows=
     getRowsFromConfig(
       configString
     );
 
-  const initialSort =
+  const initialSort=
     getSortFromConfig(
       configString
     );
 
-  res.send(`
-<!DOCTYPE html>
-
+  res.send(
+String.raw`<!DOCTYPE html>
 <html>
 
 <head>
 
 <meta
   name="viewport"
-  content="width=device-width, initial-scale=1"
+  content="width=device-width,initial-scale=1"
 >
 
 <title>Configure My Shows</title>
@@ -354,7 +438,7 @@ async function sendConfigure(
 body{
   margin:0;
   background:#101010;
-  color:white;
+  color:#fff;
   font-family:Arial,sans-serif
 }
 
@@ -379,13 +463,13 @@ h1{
   margin-top:25px
 }
 
-input[type="text"]{
+input[type=text]{
   flex:1;
   padding:14px;
   border-radius:8px;
   border:1px solid #444;
   background:#202020;
-  color:white;
+  color:#fff;
   font-size:16px
 }
 
@@ -394,9 +478,8 @@ button{
   border-radius:8px;
   padding:12px 18px;
   background:#7c4dff;
-  color:white;
-  font-weight:bold;
-  cursor:pointer
+  color:#fff;
+  font-weight:bold
 }
 
 button.remove{
@@ -500,7 +583,6 @@ button.remove{
   inset:0;
   background:#444;
   border-radius:30px;
-  transition:.2s;
   cursor:pointer
 }
 
@@ -511,9 +593,8 @@ button.remove{
   height:22px;
   left:4px;
   top:4px;
-  background:white;
-  border-radius:50%;
-  transition:.2s
+  background:#fff;
+  border-radius:50%
 }
 
 .switch input:checked+.slider{
@@ -539,8 +620,7 @@ button.remove{
 .sortDescription{
   color:#999;
   font-size:13px;
-  margin-top:5px;
-  margin-bottom:12px
+  margin:5px 0 12px
 }
 
 .sortBox select{
@@ -549,7 +629,7 @@ button.remove{
   border-radius:8px;
   border:1px solid #444;
   background:#202020;
-  color:white;
+  color:#fff;
   font-size:16px
 }
 
@@ -654,7 +734,6 @@ Your personal show collection.
 
 </div>
 
-
 <div class="rowCard">
 
 <div class="rowInfo">
@@ -681,7 +760,6 @@ Shows with an upcoming episode.
 </label>
 
 </div>
-
 
 <div class="rowCard">
 
@@ -710,7 +788,6 @@ Shows airing within the next 7 days.
 
 </div>
 
-
 <div class="rowCard">
 
 <div class="rowInfo">
@@ -737,7 +814,6 @@ Shows with an episode released in the last 7 days.
 </label>
 
 </div>
-
 
 <div class="rowCard">
 
@@ -767,7 +843,6 @@ Shows returning more than 7 days from now.
 </div>
 
 </div>
-
 
 <div class="sortBox">
 
@@ -802,14 +877,12 @@ Alphabetical
 
 </div>
 
-
 <button
   class="install"
   onclick="installAddon()"
 >
 Generate My Shows Addon
 </button>
-
 
 <div
   id="installBox"
@@ -833,9 +906,7 @@ Open in Stremio
 
 </div>
 
-
 </div>
-
 
 <script>
 
@@ -848,160 +919,171 @@ ${JSON.stringify(initialRows)};
 const initialSort =
 ${JSON.stringify(initialSort)};
 
-let selected = [];
-
+let selected=[];
 
 function applyInitialRows(){
 
-  document.getElementById(
-    "row_myshows"
-  ).checked =
-    initialRows.includes(
-      "myshows"
-    );
+  ${JSON.stringify(ALL_ROWS)}.forEach(
+    id=>{
 
-  document.getElementById(
-    "row_whatsnext"
-  ).checked =
-    initialRows.includes(
-      "whatsnext"
-    );
+      const e=
+        document.getElementById(
+          'row_'+id
+        );
 
-  document.getElementById(
-    "row_airingthisweek"
-  ).checked =
-    initialRows.includes(
-      "airingthisweek"
-    );
+      if(e){
+        e.checked=
+          initialRows.includes(id);
+      }
 
-  document.getElementById(
-    "row_recentlyaired"
-  ).checked =
-    initialRows.includes(
-      "recentlyaired"
-    );
-
-  document.getElementById(
-    "row_returningsoon"
-  ).checked =
-    initialRows.includes(
-      "returningsoon"
-    );
+    }
+  );
 
 }
-
 
 function applyInitialSort(){
 
   document.getElementById(
-    "sortOrder"
-  ).value =
+    'sortOrder'
+  ).value=
     initialSort;
 
 }
 
+function escapeHtml(s){
+
+  return String(s)
+    .replace(
+      /&/g,
+      '&amp;'
+    )
+    .replace(
+      /</g,
+      '&lt;'
+    )
+    .replace(
+      />/g,
+      '&gt;'
+    )
+    .replace(
+      /"/g,
+      '&quot;'
+    )
+    .replace(
+      /'/g,
+      '&#039;'
+    );
+
+}
 
 async function searchShows(){
 
-  const query =
+  const q=
     document
-      .getElementById("search")
+      .getElementById('search')
       .value
       .trim();
 
-  if(!query){
+  if(!q){
     return;
   }
 
-  const results =
+  const box=
     document.getElementById(
-      "results"
+      'results'
     );
 
-  results.innerHTML =
+  box.innerHTML=
     '<div class="message">Searching...</div>';
-
 
   try{
 
-    const response =
+    const r=
       await fetch(
-        "/api/search?query=" +
-        encodeURIComponent(query)
+        '/api/search?query='+
+        encodeURIComponent(q)
       );
 
-    const data =
-      await response.json();
-
+    const d=
+      await r.json();
 
     if(
-      !data.results ||
-      data.results.length === 0
+      !d.results ||
+      !d.results.length
     ){
 
-      results.innerHTML =
+      box.innerHTML=
         '<div class="message">No shows found.</div>';
 
       return;
 
     }
 
+    box.innerHTML=
+      d.results
+        .map(
+          s=>{
 
-    results.innerHTML =
-      data.results
-        .map(show => {
+            const added=
+              selected.some(
+                x=>x.id===s.id
+              );
 
-          const poster =
-            show.poster ||
-            "https://via.placeholder.com/65x95?text=No+Poster";
+            const safeName=
+              String(s.name)
+                .replace(
+                  /\\\\/g,
+                  '\\\\\\\\'
+                )
+                .replace(
+                  /'/g,
+                  "\\'"
+                );
 
-          const alreadyAdded =
-            selected.some(
-              item =>
-                item.id === show.id
-            );
+            return
+              '<div class="show">'+
+              '<img src="'+
+              (s.poster||'')+
+              '">'+
+              '<div class="showInfo">'+
+              '<div class="showTitle">'+
+              escapeHtml(s.name)+
+              '</div>'+
+              '<div class="year">'+
+              (s.year||'')+
+              '</div>'+
+              '</div>'+
+              '<button '+
+              (
+                added
+                  ? 'disabled'
+                  : ''
+              )+
+              ' onclick="addShow('+
+              s.id+
+              ',\\''+
+              safeName+
+              '\\')">'+
+              (
+                added
+                  ? 'Added'
+                  : 'Add'
+              )+
+              '</button>'+
+              '</div>';
 
+          }
+        )
+        .join('');
 
-          return `
-            <div class="show">
+  }catch(e){
 
-              <img src="${poster}">
-
-              <div class="showInfo">
-
-                <div class="showTitle">
-                  ${escapeHtml(show.name)}
-                </div>
-
-                <div class="year">
-                  ${show.year || ""}
-                </div>
-
-              </div>
-
-              <button
-                onclick="addShow(${show.id}, '${escapeJs(show.name)}')"
-                ${alreadyAdded ? "disabled" : ""}
-              >
-                ${alreadyAdded ? "Added" : "Add"}
-              </button>
-
-            </div>
-          `;
-
-        })
-        .join("");
-
-
-  }catch(error){
-
-    results.innerHTML =
+    box.innerHTML=
       '<div class="message">Search failed.</div>';
 
   }
 
 }
-
 
 function addShow(
   id,
@@ -1010,310 +1092,158 @@ function addShow(
 
   if(
     selected.some(
-      show =>
-        show.id === id
+      x=>x.id===id
     )
   ){
-
     return;
-
   }
 
-
   selected.push({
-    id:id,
-    name:name
+    id,
+    name
   });
 
-
   renderSelected();
-
   searchShows();
 
 }
-
 
 function removeShow(id){
 
-  selected =
+  selected=
     selected.filter(
-      show =>
-        show.id !== id
+      x=>x.id!==id
     );
 
   renderSelected();
-
   searchShows();
 
 }
 
-
 function renderSelected(){
 
-  const box =
+  const box=
     document.getElementById(
-      "selectedShows"
+      'selectedShows'
     );
 
+  if(!selected.length){
 
-  if(
-    selected.length === 0
-  ){
-
-    box.innerHTML =
+    box.innerHTML=
       '<div class="message">No shows added yet.</div>';
 
     return;
 
   }
 
-
-  box.innerHTML =
+  box.innerHTML=
     selected
-      .map(show => {
-
-        return `
-          <div class="selectedItem">
-
-            <span>
-              ${escapeHtml(show.name)}
-            </span>
-
-            <button
-              class="remove"
-              onclick="removeShow(${show.id})"
-            >
-              Remove
-            </button>
-
-          </div>
-        `;
-
-      })
-      .join("");
+      .map(
+        s=>
+          '<div class="selectedItem">'+
+          '<span>'+
+          escapeHtml(s.name)+
+          '</span>'+
+          '<button class="remove" onclick="removeShow('+
+          s.id+
+          ')">Remove</button>'+
+          '</div>'
+      )
+      .join('');
 
 }
-
 
 function installAddon(){
 
-  if(
-    selected.length === 0
-  ){
+  if(!selected.length){
 
     alert(
-      "Add at least one show first."
+      'Add at least one show first.'
     );
 
     return;
 
   }
 
-
-  const ids =
+  const ids=
     selected
-      .map(show => show.id)
-      .join(",");
+      .map(
+        x=>x.id
+      )
+      .join(',');
 
+  const rows=
+    ${JSON.stringify(ALL_ROWS)}
+      .filter(
+        x=>
+          document.getElementById(
+            'row_'+x
+          ).checked
+      );
 
-  const rows = [];
-
-
-  if(
+  const sort=
     document.getElementById(
-      "row_myshows"
-    ).checked
-  ){
-
-    rows.push(
-      "myshows"
-    );
-
-  }
-
-
-  if(
-    document.getElementById(
-      "row_whatsnext"
-    ).checked
-  ){
-
-    rows.push(
-      "whatsnext"
-    );
-
-  }
-
-
-  if(
-    document.getElementById(
-      "row_airingthisweek"
-    ).checked
-  ){
-
-    rows.push(
-      "airingthisweek"
-    );
-
-  }
-
-
-  if(
-    document.getElementById(
-      "row_recentlyaired"
-    ).checked
-  ){
-
-    rows.push(
-      "recentlyaired"
-    );
-
-  }
-
-
-  if(
-    document.getElementById(
-      "row_returningsoon"
-    ).checked
-  ){
-
-    rows.push(
-      "returningsoon"
-    );
-
-  }
-
-
-  if(
-    rows.length === 0
-  ){
-
-    alert(
-      "Choose at least one Home row."
-    );
-
-    return;
-
-  }
-
-
-  const sort =
-    document.getElementById(
-      "sortOrder"
+      'sortOrder'
     ).value;
 
+  if(!rows.length){
 
-  const config =
-    ids +
-    "~" +
-    rows.join(",") +
-    "~" +
-    sort;
-
-
-  const base =
-    window.location.origin;
-
-
-  const manifestUrl =
-    base +
-    "/" +
-    config +
-    "/manifest.json";
-
-
-  const stremioUrl =
-    "stremio://" +
-    manifestUrl.substring(
-      "https://".length
+    alert(
+      'Choose at least one Home row.'
     );
 
+    return;
+
+  }
+
+  const config=
+    ids+
+    '~'+
+    rows.join(',')+
+    '~'+
+    sort;
+
+  const manifestUrl=
+    location.origin+
+    '/'+
+    config+
+    '/manifest.json';
 
   document.getElementById(
-    "installUrl"
-  ).textContent =
+    'installUrl'
+  ).textContent=
     manifestUrl;
 
-
   document.getElementById(
-    "installBox"
-  ).style.display =
-    "block";
+    'installBox'
+  ).style.display=
+    'block';
 
-
-  window.stremioInstallUrl =
-    stremioUrl;
+  window.stremioInstallUrl=
+    'stremio://'+
+    manifestUrl.replace(
+      /^https?:\\/\\//,
+      ''
+    );
 
 }
-
 
 function openStremio(){
 
   if(
-    !window.stremioInstallUrl
+    window.stremioInstallUrl
   ){
 
-    return;
+    location.href=
+      window.stremioInstallUrl;
 
   }
 
-  window.location.href =
-    window.stremioInstallUrl;
-
 }
-
-
-function escapeHtml(text){
-
-  return String(text)
-    .replace(
-      /&/g,
-      "&amp;"
-    )
-    .replace(
-      /</g,
-      "&lt;"
-    )
-    .replace(
-      />/g,
-      "&gt;"
-    )
-    .replace(
-      /"/g,
-      "&quot;"
-    )
-    .replace(
-      /'/g,
-      "&#039;"
-    );
-
-}
-
-
-function escapeJs(text){
-
-  return String(text)
-    .replace(
-      /\\/g,
-      "\\\\"
-    )
-    .replace(
-      /'/g,
-      "\\'"
-    )
-    .replace(
-      /"/g,
-      "&quot;"
-    );
-
-}
-
 
 async function loadExistingShows(){
 
-  if(
-    initialIds.length === 0
-  ){
+  if(!initialIds.length){
 
     renderSelected();
 
@@ -1321,51 +1251,35 @@ async function loadExistingShows(){
 
   }
 
-
   try{
 
-    const response =
+    const r=
       await fetch(
-        "/api/shows?ids=" +
-        initialIds.join(",")
+        '/api/shows?ids='+
+        initialIds.join(',')
       );
 
+    const d=
+      await r.json();
 
-    const data =
-      await response.json();
-
-
-    if(
-      data.results &&
-      Array.isArray(
-        data.results
-      )
-    ){
-
-      selected =
-        data.results.map(
-          show => ({
-            id:show.id,
-            name:show.name
+    selected=
+      (d.results||[])
+        .map(
+          s=>({
+            id:s.id,
+            name:s.name
           })
         );
 
-    }
+  }catch(e){
 
-  }catch(error){
-
-    console.error(
-      "Failed to load existing shows",
-      error
-    );
+    console.error(e);
 
   }
-
 
   renderSelected();
 
 }
-
 
 applyInitialRows();
 
@@ -1377,69 +1291,50 @@ loadExistingShows();
 
 </body>
 
-</html>
-  `);
+</html>`
+  );
 
 }
 
-
 app.get(
-  "/configure",
-  async (req,res) => {
-
-    await sendConfigure(
+  '/configure',
+  (req,res)=>
+    sendConfigure(
       req,
       res,
       null
-    );
-
-  }
+    )
 );
 
-
 app.get(
-  "/:config/configure",
-  async (req,res) => {
-
-    await sendConfigure(
+  '/:config/configure',
+  (req,res)=>
+    sendConfigure(
       req,
       res,
       req.params.config
-    );
-
-  }
+    )
 );
 
 
 /*
 ====================================================
-TMDB SEARCH FOR CONFIG PAGE
+SEARCH
 ====================================================
 */
 
 app.get(
-  "/api/search",
-  async (req,res) => {
+  '/api/search',
+  async(req,res)=>{
 
     try{
 
-      if(!TMDB_API_KEY){
-
-        return res.status(500).json({
-          error:
-            "TMDB_API_KEY is not configured"
-        });
-
-      }
-
-
-      const query =
+      const q=
         String(
-          req.query.query || ""
+          req.query.query||''
         ).trim();
 
-
-      if(!query){
+      if(!q){
 
         return res.json({
           results:[]
@@ -1447,20 +1342,19 @@ app.get(
 
       }
 
-
-      const response =
+      const r=
         await axios.get(
-          tmdbUrl("/search/tv"),
+          tmdbUrl('/search/tv'),
           {
             params:{
               api_key:
                 TMDB_API_KEY,
 
               query:
-                query,
+                q,
 
               language:
-                "en-US",
+                'en-US',
 
               include_adult:
                 false
@@ -1468,56 +1362,48 @@ app.get(
           }
         );
 
-
-      const results =
-        (response.data.results || [])
-          .slice(0,20)
-          .map(show => {
-
-            return {
-
-              id:
-                show.id,
-
-              name:
-                show.name,
-
-              year:
-                show.first_air_date
-                  ? show.first_air_date.substring(0,4)
-                  : "",
-
-              poster:
-                imageUrl(
-                  show.poster_path
-                ),
-
-              overview:
-                show.overview || ""
-
-            };
-
-          });
-
-
       res.json({
+
         results:
-          results
+          (r.data.results||[])
+            .slice(0,20)
+            .map(
+              s=>({
+
+                id:
+                  s.id,
+
+                name:
+                  s.name,
+
+                year:
+                  s.first_air_date
+                    ? s.first_air_date.slice(0,4)
+                    : '',
+
+                poster:
+                  imageUrl(
+                    s.poster_path
+                  ),
+
+                overview:
+                  s.overview||''
+
+              })
+            )
+
       });
 
-
-    }catch(error){
+    }catch(e){
 
       console.error(
-        error.response
-          ? error.response.data
-          : error.message
+        e.response?.data||
+        e.message
       );
-
 
       res.status(500).json({
         error:
-          "Failed to search TV shows"
+          'Failed to search TV shows'
       });
 
     }
@@ -1528,43 +1414,29 @@ app.get(
 
 /*
 ====================================================
-LOAD EXISTING SHOWS FOR CONFIGURE PAGE
+LOAD CONFIGURED SHOWS
 ====================================================
 */
 
 app.get(
-  "/api/shows",
-  async (req,res) => {
+  '/api/shows',
+  async(req,res)=>{
 
     try{
 
-      if(!TMDB_API_KEY){
-
-        return res.status(500).json({
-          error:
-            "TMDB_API_KEY is not configured"
-        });
-
-      }
-
-
-      const ids =
+      const ids=
         String(
-          req.query.ids || ""
+          req.query.ids||''
         )
-          .split(",")
+          .split(',')
           .map(
-            id =>
-              id.trim()
+            x=>x.trim()
           )
           .filter(
-            id =>
-              /^\d+$/.test(id)
+            x=>/^\d+$/.test(x)
           );
 
-
-      const results = [];
-
+      const results=[];
 
       for(
         const id of ids
@@ -1572,51 +1444,40 @@ app.get(
 
         try{
 
-          const data =
+          const d=
             await getShowDetails(
               id
             );
 
-
           results.push({
+
             id:
               Number(id),
 
             name:
-              data.name
+              d.name
+
           });
 
-        }catch(error){
+        }catch(e){
 
           console.error(
-            "Failed to load show " +
-            id,
-            error.response
-              ? error.response.data
-              : error.message
+            'Failed to load show '+id
           );
 
         }
 
       }
 
-
       res.json({
-        results:
-          results
+        results
       });
 
-
-    }catch(error){
-
-      console.error(
-        error
-      );
-
+    }catch(e){
 
       res.status(500).json({
         error:
-          "Failed to load existing shows"
+          'Failed to load existing shows'
       });
 
     }
@@ -1631,80 +1492,65 @@ MANIFEST
 ====================================================
 */
 
-function buildManifest(
-  config
-){
+function buildManifest(config){
 
-  const shows =
-    getShowsFromConfig(
-      config
-    );
+  const names={
 
-  const rows =
-    getRowsFromConfig(
-      config
-    );
+    myshows:
+      'My Shows',
 
-  return {
+    whatsnext:
+      "What's Next?",
+
+    airingthisweek:
+      'Airing This Week',
+
+    recentlyaired:
+      'Recently Aired',
+
+    returningsoon:
+      'Returning Soon'
+
+  };
+
+  return{
 
     id:
-      "com.nick1234.myshows",
+      'com.nick1234.myshows',
 
     version:
-      "2.4.0",
+      '2.4.0',
 
     name:
-      "My Shows",
+      'My Shows',
 
     description:
       "Track upcoming episodes and add shows you're watching.",
 
     resources:[
-      "catalog",
-      "meta"
+      'catalog',
+      'meta'
     ],
 
     types:[
-      "series"
+      'series'
     ],
 
     catalogs:
-      rows.map(
-        row => {
+      getRowsFromConfig(
+        config
+      ).map(
+        id=>({
 
-          const names = {
+          type:
+            'series',
 
-            myshows:
-              "My Shows",
+          id,
 
-            whatsnext:
-              "What's Next?",
+          name:
+            names[id]||id
 
-            airingthisweek:
-              "Airing This Week",
-
-            recentlyaired:
-              "Recently Aired",
-
-            returningsoon:
-              "Returning Soon"
-
-          };
-
-          return {
-
-            type:
-              "series",
-
-            id:
-              row,
-
-            name:
-              names[row] || row
-
-          };
-
-        }
+        })
       ),
 
     behaviorHints:{
@@ -1716,32 +1562,22 @@ function buildManifest(
 
 }
 
-
 app.get(
-  "/manifest.json",
-  (req,res) => {
-
+  '/manifest.json',
+  (req,res)=>
     res.json(
-      buildManifest(
-        null
-      )
-    );
-
-  }
+      buildManifest(null)
+    )
 );
 
-
 app.get(
-  "/:config/manifest.json",
-  (req,res) => {
-
+  '/:config/manifest.json',
+  (req,res)=>
     res.json(
       buildManifest(
         req.params.config
       )
-    );
-
-  }
+    )
 );
 
 
@@ -1759,229 +1595,157 @@ async function sendMyShows(
 
   try{
 
-    if(!TMDB_API_KEY){
-
-      return res.status(500).json({
-        error:
-          "TMDB_API_KEY is not configured"
-      });
-
-    }
-
-
-    const shows =
+    const shows=
       getShowsFromConfig(
         config
       );
 
-
-    const items = [];
-
+    const items=[];
 
     for(
-      let i = 0;
-      i < shows.length;
+      let i=0;
+      i<shows.length;
       i++
     ){
 
-      const show =
-        shows[i];
-
-
       try{
 
-        const data =
+        const d=
           await getShowDetails(
-            show.tmdbId
+            shows[i].tmdbId
           );
 
+        const n=
+          d.next_episode_to_air;
 
-        const next =
-          data.next_episode_to_air;
-
-
-        const last =
-          data.last_episode_to_air;
-
-
-        const nextTime =
-          next &&
-          next.air_date
-            ? new Date(
-                next.air_date +
-                "T00:00:00Z"
-              ).getTime()
-            : null;
-
-
-        const lastTime =
-          last &&
-          last.air_date
-            ? new Date(
-                last.air_date +
-                "T00:00:00Z"
-              ).getTime()
-            : null;
-
+        const l=
+          d.last_episode_to_air;
 
         items.push({
 
           data:
-            data,
+            d,
 
           originalIndex:
             i,
 
           nextTime:
-            nextTime,
+            n?.air_date
+              ? new Date(
+                  n.air_date+
+                  'T00:00:00Z'
+                ).getTime()
+              : null,
 
           lastTime:
-            lastTime
+            l?.air_date
+              ? new Date(
+                  l.air_date+
+                  'T00:00:00Z'
+                ).getTime()
+              : null
 
         });
 
-      }catch(error){
+      }catch(e){
 
         console.error(
-          "Failed to load " +
-          show.tmdbId,
-          error.response
-            ? error.response.data
-            : error.message
+          'Failed to load '+
+          shows[i].tmdbId,
+          e.response?.data||
+          e.message
         );
 
       }
 
     }
 
-
-    const sort =
-      getSortFromConfig(
-        config
-      );
-
-
     sortMyShows(
       items,
-      sort
+      getSortFromConfig(
+        config
+      )
     );
 
+    res.json({
 
-    const metas =
-      items.map(
-        item => {
-
-          const data =
-            item.data;
-
-
-          const next =
-            data.next_episode_to_air;
-
-
-          let description = "";
-
-
-          if(next){
-
-            description =
-              "Next Episode: S" +
-              next.season_number +
-              " E" +
-              next.episode_number +
-              " — " +
-              next.name +
-              "\n" +
-              "Airs: " +
-              formatDate(
-                next.air_date
-              );
-
-          }
-
-
-          return {
+      metas:
+        items.map(
+          ({data:d})=>({
 
             id:
-              "tmdb:" +
-              data.id,
+              'tmdb:'+d.id,
 
             type:
-              "series",
+              'series',
 
             name:
-              data.name,
+              d.name,
 
             poster:
               imageUrl(
-                data.poster_path
+                d.poster_path
               ),
 
             background:
               imageUrl(
-                data.backdrop_path,
-                "w1280"
+                d.backdrop_path,
+                'w1280'
               ),
 
             description:
-              description
+              d.next_episode_to_air
+                ? 'Next Episode: S'+
+                  d.next_episode_to_air.season_number+
+                  ' E'+
+                  d.next_episode_to_air.episode_number+
+                  ' — '+
+                  d.next_episode_to_air.name+
+                  '\nAirs: '+
+                  formatDate(
+                    d.next_episode_to_air.air_date
+                  )
+                : ''
 
-          };
+          })
+        )
 
-        }
-      );
-
-
-    res.json({
-      metas:
-        metas
     });
 
-
-  }catch(error){
+  }catch(e){
 
     console.error(
-      error.response
-        ? error.response.data
-        : error.message
+      e.response?.data||
+      e.message
     );
-
 
     res.status(500).json({
       error:
-        "Failed to load My Shows"
+        'Failed to load My Shows'
     });
 
   }
 
 }
 
-
 app.get(
-  "/catalog/series/myshows.json",
-  async (req,res) => {
-
-    await sendMyShows(
+  '/catalog/series/myshows.json',
+  (req,res)=>
+    sendMyShows(
       req,
       res,
       null
-    );
-
-  }
+    )
 );
 
-
 app.get(
-  "/:config/catalog/series/myshows.json",
-  async (req,res) => {
-
-    await sendMyShows(
+  '/:config/catalog/series/myshows.json',
+  (req,res)=>
+    sendMyShows(
       req,
       res,
       req.params.config
-    );
-
-  }
+    )
 );
 
 
@@ -1991,7 +1755,7 @@ AIRING THIS WEEK
 ====================================================
 */
 
-async function sendAiringThisWeek(
+async function sendAiring(
   req,
   res,
   config
@@ -1999,163 +1763,135 @@ async function sendAiringThisWeek(
 
   try{
 
-    if(!TMDB_API_KEY){
-
-      return res.status(500).json({
-        error:
-          "TMDB_API_KEY is not configured"
-      });
-
-    }
-
-
-    const shows =
-      getShowsFromConfig(
-        config
-      );
-
-
-    const metas = [];
-
+    const out=[];
 
     for(
-      const show of shows
+      const s of
+      getShowsFromConfig(
+        config
+      )
     ){
 
       try{
 
-        const data =
+        const d=
           await getShowDetails(
-            show.tmdbId
+            s.tmdbId
           );
 
+        const n=
+          d.next_episode_to_air;
 
         if(
-          data.next_episode_to_air &&
+          n &&
           isWithinNext7Days(
-            data.next_episode_to_air.air_date
+            n.air_date
           )
         ){
 
-          const next =
-            data.next_episode_to_air;
-
-
-          metas.push({
-
-            id:
-              "tmdb:" +
-              data.id,
-
-            type:
-              "series",
-
-            name:
-              data.name,
-
-            poster:
-              imageUrl(
-                data.poster_path
-              ),
-
-            background:
-              imageUrl(
-                data.backdrop_path,
-                "w1280"
-              ),
-
-            description:
-              "🔥 Airs " +
-              formatDate(
-                next.air_date
-              ) +
-              "\n\n" +
-              "Season " +
-              next.season_number +
-              ", Episode " +
-              next.episode_number +
-              ": " +
-              next.name
-
+          out.push({
+            d,
+            n
           });
 
         }
 
-      }catch(error){
-
-        console.error(
-          "Failed to load " +
-          show.tmdbId,
-          error.response
-            ? error.response.data
-            : error.message
-        );
-
-      }
+      }catch(e){}
 
     }
 
-
-    res.json({
-      metas:
-        metas
-    });
-
-
-  }catch(error){
-
-    console.error(
-      error.response
-        ? error.response.data
-        : error.message
+    out.sort(
+      (a,b)=>
+        new Date(
+          a.n.air_date
+        )-
+        new Date(
+          b.n.air_date
+        )
     );
 
+    res.json({
+
+      metas:
+        out.map(
+          ({d,n})=>({
+
+            id:
+              'tmdb:'+d.id,
+
+            type:
+              'series',
+
+            name:
+              d.name,
+
+            poster:
+              imageUrl(
+                d.poster_path
+              ),
+
+            background:
+              imageUrl(
+                d.backdrop_path,
+                'w1280'
+              ),
+
+            description:
+              '🔥 Airs '+
+              formatDate(
+                n.air_date
+              )+
+              '\n\nSeason '+
+              n.season_number+
+              ', Episode '+
+              n.episode_number+
+              ': '+
+              n.name
+
+          })
+        )
+
+    });
+
+  }catch(e){
 
     res.status(500).json({
       error:
-        "Failed to load Airing This Week"
+        'Failed to load Airing This Week'
     });
 
   }
 
 }
 
-
 app.get(
-  "/catalog/series/airingthisweek.json",
-  async (req,res) => {
-
-    await sendAiringThisWeek(
+  '/catalog/series/airingthisweek.json',
+  (req,res)=>
+    sendAiring(
       req,
       res,
       null
-    );
-
-  }
+    )
 );
 
-
 app.get(
-  "/:config/catalog/series/airingthisweek.json",
-  async (req,res) => {
-
-    await sendAiringThisWeek(
+  '/:config/catalog/series/airingthisweek.json',
+  (req,res)=>
+    sendAiring(
       req,
       res,
       req.params.config
-    );
-
-  }
+    )
 );
 
 
 /*
 ====================================================
-WHAT'S NEXT?
+WHAT'S NEXT
 ====================================================
 */
 
-async function sendWhatsNext(
+async function sendNext(
   req,
   res,
   config
@@ -2163,149 +1899,95 @@ async function sendWhatsNext(
 
   try{
 
-    if(!TMDB_API_KEY){
-
-      return res.status(500).json({
-        error:
-          "TMDB_API_KEY is not configured"
-      });
-
-    }
-
-
-    const shows =
-      getShowsFromConfig(
-        config
-      );
-
-
-    const upcoming = [];
-
+    const out=[];
 
     for(
-      const show of shows
+      const s of
+      getShowsFromConfig(
+        config
+      )
     ){
 
       try{
 
-        const data =
+        const d=
           await getShowDetails(
-            show.tmdbId
+            s.tmdbId
           );
 
+        const n=
+          d.next_episode_to_air;
 
         if(
-          data.next_episode_to_air &&
-          data.next_episode_to_air.air_date
+          n &&
+          n.air_date
         ){
 
-          upcoming.push({
-
-            data:
-              data,
-
-            episode:
-              data.next_episode_to_air,
-
-            airTime:
-              new Date(
-                data.next_episode_to_air.air_date +
-                "T00:00:00Z"
-              ).getTime()
-
+          out.push({
+            d,
+            n
           });
 
         }
 
-      }catch(error){
-
-        console.error(
-          "Failed to load " +
-          show.tmdbId,
-          error.response
-            ? error.response.data
-            : error.message
-        );
-
-      }
+      }catch(e){}
 
     }
 
-
-    upcoming.sort(
-      (a,b) =>
-        a.airTime -
-        b.airTime
+    out.sort(
+      (a,b)=>
+        new Date(
+          a.n.air_date
+        )-
+        new Date(
+          b.n.air_date
+        )
     );
 
+    res.json({
 
-    const metas =
-      upcoming.map(
-        item => {
-
-          const data =
-            item.data;
-
-          const next =
-            item.episode;
-
-
-          return {
+      metas:
+        out.map(
+          ({d,n})=>({
 
             id:
-              "tmdb:" +
-              data.id,
+              'tmdb:'+d.id,
 
             type:
-              "series",
+              'series',
 
             name:
-              data.name,
+              d.name,
 
             poster:
               imageUrl(
-                data.poster_path
+                d.poster_path
               ),
 
             background:
               imageUrl(
-                data.backdrop_path,
-                "w1280"
+                d.backdrop_path,
+                'w1280'
               ),
 
             description:
-              "⏭️ Next Episode: S" +
-              next.season_number +
-              " E" +
-              next.episode_number +
-              " — " +
-              next.name +
-              "\n" +
-              "📅 Airs " +
+              '⏭️ Next Episode: S'+
+              n.season_number+
+              ' E'+
+              n.episode_number+
+              ' — '+
+              n.name+
+              '\n📅 Airs '+
               formatDate(
-                next.air_date
+                n.air_date
               )
 
-          };
+          })
+        )
 
-        }
-      );
-
-
-    res.json({
-      metas:
-        metas
     });
 
-
-  }catch(error){
-
-    console.error(
-      error.response
-        ? error.response.data
-        : error.message
-    );
-
+  }catch(e){
 
     res.status(500).json({
       error:
@@ -2316,32 +1998,24 @@ async function sendWhatsNext(
 
 }
 
-
 app.get(
-  "/catalog/series/whatsnext.json",
-  async (req,res) => {
-
-    await sendWhatsNext(
+  '/catalog/series/whatsnext.json',
+  (req,res)=>
+    sendNext(
       req,
       res,
       null
-    );
-
-  }
+    )
 );
 
-
 app.get(
-  "/:config/catalog/series/whatsnext.json",
-  async (req,res) => {
-
-    await sendWhatsNext(
+  '/:config/catalog/series/whatsnext.json',
+  (req,res)=>
+    sendNext(
       req,
       res,
       req.params.config
-    );
-
-  }
+    )
 );
 
 
@@ -2351,88 +2025,20 @@ RECENTLY AIRED
 ====================================================
 */
 
-function isRecentlyAired(
-  dateString
-){
+function daysSince(s){
 
-  if(!dateString){
-    return false;
-  }
-
-
-  const today =
-    new Date();
-
-  today.setUTCHours(
-    0,
-    0,
-    0,
-    0
-  );
-
-
-  const sevenDaysAgo =
-    new Date(today);
-
-  sevenDaysAgo.setUTCDate(
-    sevenDaysAgo.getUTCDate() - 7
-  );
-
-
-  const target =
+  return dayDiff(
     new Date(
-      dateString +
-      "T00:00:00Z"
-    );
-
-
-  return (
-    target >= sevenDaysAgo &&
-    target <= today
+      todayUTC()
+    )
+      .toISOString()
+      .slice(0,10),
+    s
   );
 
 }
 
-
-function daysSince(
-  dateString
-){
-
-  if(!dateString){
-    return null;
-  }
-
-
-  const today =
-    new Date();
-
-  today.setUTCHours(
-    0,
-    0,
-    0,
-    0
-  );
-
-
-  const target =
-    new Date(
-      dateString +
-      "T00:00:00Z"
-    );
-
-
-  return Math.round(
-    (
-      today.getTime() -
-      target.getTime()
-    ) /
-    86400000
-  );
-
-}
-
-
-async function sendRecentlyAired(
+async function sendRecently(
   req,
   res,
   config
@@ -2440,213 +2046,142 @@ async function sendRecentlyAired(
 
   try{
 
-    if(!TMDB_API_KEY){
-
-      return res.status(500).json({
-        error:
-          "TMDB_API_KEY is not configured"
-      });
-
-    }
-
-
-    const shows =
-      getShowsFromConfig(
-        config
-      );
-
-
-    const aired = [];
-
+    const out=[];
 
     for(
-      const show of shows
+      const s of
+      getShowsFromConfig(
+        config
+      )
     ){
 
       try{
 
-        const data =
+        const d=
           await getShowDetails(
-            show.tmdbId
+            s.tmdbId
           );
 
-
-        const last =
-          data.last_episode_to_air;
-
+        const e=
+          d.last_episode_to_air;
 
         if(
-          last &&
-          last.air_date &&
+          e &&
+          e.air_date &&
           isRecentlyAired(
-            last.air_date
+            e.air_date
           )
         ){
 
-          aired.push({
+          out.push({
 
-            data:
-              data,
+            d,
+            e,
 
-            episode:
-              last,
-
-            airTime:
+            t:
               new Date(
-                last.air_date +
-                "T00:00:00Z"
+                e.air_date+
+                'T00:00:00Z'
               ).getTime()
 
           });
 
         }
 
-      }catch(error){
-
-        console.error(
-          "Failed to load " +
-          show.tmdbId,
-          error.response
-            ? error.response.data
-            : error.message
-        );
-
-      }
+      }catch(e){}
 
     }
 
-
-    aired.sort(
-      (a,b) =>
-        b.airTime -
-        a.airTime
+    out.sort(
+      (a,b)=>
+        b.t-a.t
     );
-
-
-    const metas =
-      aired.map(
-        item => {
-
-          const data =
-            item.data;
-
-          const episode =
-            item.episode;
-
-          const days =
-            daysSince(
-              episode.air_date
-            );
-
-
-          let dayText =
-            "📅 Aired " +
-            days +
-            " days ago";
-
-
-          if(days === 0){
-
-            dayText =
-              "📅 Aired today";
-
-          }else if(days === 1){
-
-            dayText =
-              "📅 Aired yesterday";
-
-          }
-
-
-          return {
-
-            id:
-              "tmdb:" +
-              data.id,
-
-            type:
-              "series",
-
-            name:
-              data.name,
-
-            poster:
-              imageUrl(
-                data.poster_path
-              ),
-
-            background:
-              imageUrl(
-                data.backdrop_path,
-                "w1280"
-              ),
-
-            description:
-              "🆕 S" +
-              episode.season_number +
-              " E" +
-              episode.episode_number +
-              " — " +
-              episode.name +
-              "\n" +
-              dayText
-
-          };
-
-        }
-      );
-
 
     res.json({
+
       metas:
-        metas
+        out.map(
+          ({d,e})=>{
+
+            const n=
+              daysSince(
+                e.air_date
+              );
+
+            return{
+
+              id:
+                'tmdb:'+d.id,
+
+              type:
+                'series',
+
+              name:
+                d.name,
+
+              poster:
+                imageUrl(
+                  d.poster_path
+                ),
+
+              background:
+                imageUrl(
+                  d.backdrop_path,
+                  'w1280'
+                ),
+
+              description:
+                '🆕 S'+
+                e.season_number+
+                ' E'+
+                e.episode_number+
+                ' — '+
+                e.name+
+                '\n📅 Aired '+
+                (
+                  n===0
+                    ? 'today'
+                    : n===1
+                      ? 'yesterday'
+                      : n+' days ago'
+                )
+
+            };
+
+          }
+        )
+
     });
 
-
-  }catch(error){
-
-    console.error(
-      error.response
-        ? error.response.data
-        : error.message
-    );
-
+  }catch(e){
 
     res.status(500).json({
       error:
-        "Failed to load Recently Aired"
+        'Failed to load Recently Aired'
     });
 
   }
 
 }
 
-
 app.get(
-  "/catalog/series/recentlyaired.json",
-  async (req,res) => {
-
-    await sendRecentlyAired(
+  '/catalog/series/recentlyaired.json',
+  (req,res)=>
+    sendRecently(
       req,
       res,
       null
-    );
-
-  }
+    )
 );
 
-
 app.get(
-  "/:config/catalog/series/recentlyaired.json",
-  async (req,res) => {
-
-    await sendRecentlyAired(
+  '/:config/catalog/series/recentlyaired.json',
+  (req,res)=>
+    sendRecently(
       req,
       res,
       req.params.config
-    );
-
-  }
+    )
 );
 
 
@@ -2656,86 +2191,7 @@ RETURNING SOON
 ====================================================
 */
 
-function isReturningSoon(
-  dateString
-){
-
-  if(!dateString){
-    return false;
-  }
-
-
-  const today =
-    new Date();
-
-  today.setUTCHours(
-    0,
-    0,
-    0,
-    0
-  );
-
-
-  const target =
-    new Date(
-      dateString +
-      "T00:00:00Z"
-    );
-
-
-  const sevenDays =
-    new Date(today);
-
-  sevenDays.setUTCDate(
-    sevenDays.getUTCDate() +
-    7
-  );
-
-
-  return target > sevenDays;
-
-}
-
-
-function daysUntil(
-  dateString
-){
-
-  if(!dateString){
-    return null;
-  }
-
-
-  const today =
-    new Date();
-
-  today.setUTCHours(
-    0,
-    0,
-    0,
-    0
-  );
-
-
-  const target =
-    new Date(
-      dateString +
-      "T00:00:00Z"
-    );
-
-
-  return Math.round(
-    (
-      target.getTime() -
-      today.getTime()
-    ) /
-    86400000
-  );
-
-}
-
-
-async function sendReturningSoon(
+async function sendReturning(
   req,
   res,
   config
@@ -2743,214 +2199,146 @@ async function sendReturningSoon(
 
   try{
 
-    if(!TMDB_API_KEY){
-
-      return res.status(500).json({
-        error:
-          "TMDB_API_KEY is not configured"
-      });
-
-    }
-
-
-    const shows =
-      getShowsFromConfig(
-        config
-      );
-
-
-    const returning = [];
-
+    const out=[];
 
     for(
-      const show of shows
+      const s of
+      getShowsFromConfig(
+        config
+      )
     ){
 
       try{
 
-        const data =
+        const d=
           await getShowDetails(
-            show.tmdbId
+            s.tmdbId
           );
 
-
-        const next =
-          data.next_episode_to_air;
-
+        const n=
+          d.next_episode_to_air;
 
         if(
-          next &&
-          next.air_date &&
+          n &&
+          n.air_date &&
           isReturningSoon(
-            next.air_date
+            n.air_date
           )
         ){
 
-          returning.push({
+          out.push({
 
-            data:
-              data,
+            d,
+            n,
 
-            episode:
-              next,
-
-            airTime:
+            t:
               new Date(
-                next.air_date +
-                "T00:00:00Z"
-              ).getTime(),
-
-            daysAway:
-              daysUntil(
-                next.air_date
-              )
+                n.air_date+
+                'T00:00:00Z'
+              ).getTime()
 
           });
 
         }
 
-      }catch(error){
-
-        console.error(
-          "Failed to load " +
-          show.tmdbId,
-          error.response
-            ? error.response.data
-            : error.message
-        );
-
-      }
+      }catch(e){}
 
     }
 
-
-    returning.sort(
-      (a,b) =>
-        a.airTime -
-        b.airTime
+    out.sort(
+      (a,b)=>
+        a.t-b.t
     );
-
-
-    const metas =
-      returning.map(
-        item => {
-
-          const data =
-            item.data;
-
-          const next =
-            item.episode;
-
-          const days =
-            item.daysAway;
-
-
-          let dayText =
-            "📅 In " +
-            days +
-            " days";
-
-
-          if(days === 1){
-
-            dayText =
-              "📅 In 1 day";
-
-          }
-
-
-          return {
-
-            id:
-              "tmdb:" +
-              data.id,
-
-            type:
-              "series",
-
-            name:
-              data.name,
-
-            poster:
-              imageUrl(
-                data.poster_path
-              ),
-
-            background:
-              imageUrl(
-                data.backdrop_path,
-                "w1280"
-              ),
-
-            description:
-              "🔄 Returning " +
-              formatDate(
-                next.air_date
-              ) +
-              "\n" +
-              "Season " +
-              next.season_number +
-              " • Episode " +
-              next.episode_number +
-              ": " +
-              next.name +
-              "\n" +
-              dayText
-
-          };
-
-        }
-      );
-
 
     res.json({
+
       metas:
-        metas
+        out.map(
+          ({d,n})=>{
+
+            const days=
+              daysUntil(
+                n.air_date
+              );
+
+            return{
+
+              id:
+                'tmdb:'+d.id,
+
+              type:
+                'series',
+
+              name:
+                d.name,
+
+              poster:
+                imageUrl(
+                  d.poster_path
+                ),
+
+              background:
+                imageUrl(
+                  d.backdrop_path,
+                  'w1280'
+                ),
+
+              description:
+                '🔄 Returning '+
+                formatDate(
+                  n.air_date
+                )+
+                '\nSeason '+
+                n.season_number+
+                ' • Episode '+
+                n.episode_number+
+                ': '+
+                n.name+
+                '\n📅 In '+
+                days+
+                ' day'+
+                (
+                  days===1
+                    ? ''
+                    : 's'
+                )
+
+            };
+
+          }
+        )
+
     });
 
-  }catch(error){
-
-    console.error(
-      error.response
-        ? error.response.data
-        : error.message
-    );
+  }catch(e){
 
     res.status(500).json({
       error:
-        "Failed to load Returning Soon"
+        'Failed to load Returning Soon'
     });
 
   }
 
 }
 
-
 app.get(
-  "/catalog/series/returningsoon.json",
-  async (req,res) => {
-
-    await sendReturningSoon(
+  '/catalog/series/returningsoon.json',
+  (req,res)=>
+    sendReturning(
       req,
       res,
       null
-    );
-
-  }
+    )
 );
 
-
 app.get(
-  "/:config/catalog/series/returningsoon.json",
-  async (req,res) => {
-
-    await sendReturningSoon(
+  '/:config/catalog/series/returningsoon.json',
+  (req,res)=>
+    sendReturning(
       req,
       res,
       req.params.config
-    );
-
-  }
+    )
 );
 
 
@@ -2967,410 +2355,320 @@ async function sendMeta(
 
   try{
 
-    if(!TMDB_API_KEY){
-
-      return res.status(500).json({
-        error:
-          "TMDB_API_KEY is not configured"
-      });
-
-    }
-
-
-    const id =
+    const id=
       req.params.id;
 
-
     if(
-      !id.startsWith("tmdb:")
+      !id.startsWith('tmdb:')
     ){
 
       return res.status(404).json({
         error:
-          "Unknown show ID"
+          'Unknown show ID'
       });
 
     }
 
+    const tmdbId=
+      id.slice(5);
 
-    const tmdbId =
-      id.replace(
-        "tmdb:",
-        ""
-      );
-
-
-    const data =
+    const d=
       await getShowDetails(
         tmdbId
       );
 
+    let episodes=[];
 
-    /*
-    ====================================================
-    LOAD ALL SEASONS AND EPISODES
-    ====================================================
-    */
-
-    let episodes = [];
-
-
-    const seasons =
-      (data.seasons || [])
+    const seasons=
+      (d.seasons||[])
         .filter(
-          season =>
-            season.season_number > 0
+          s=>
+            s.season_number>0
         )
         .sort(
-          (a,b) =>
-            a.season_number -
+          (a,b)=>
+            a.season_number-
             b.season_number
         );
 
-
     for(
-      const season of seasons
+      const s of seasons
     ){
 
       try{
 
-        const seasonEpisodes =
-          await getSeasonEpisodes(
+        episodes.push(
+          ...await getSeasonEpisodes(
             tmdbId,
-            season.season_number
-          );
+            s.season_number
+          )
+        );
 
-
-        episodes =
-          episodes.concat(
-            seasonEpisodes
-          );
-
-      }catch(error){
+      }catch(e){
 
         console.error(
-          "Failed to load season " +
-          season.season_number +
-          " for TMDB " +
-          tmdbId,
-          error.response
-            ? error.response.data
-            : error.message
+          'Season load failed',
+          s.season_number
         );
 
       }
 
     }
 
-
-    const videos =
+    const videos=
       episodes.map(
-        episode => {
+        e=>({
 
-          return {
+          id:
+            'tmdb:'+
+            tmdbId+
+            ':'+
+            e.season_number+
+            ':'+
+            e.episode_number,
 
-            id:
-              "tmdb:" +
-              tmdbId +
-              ":" +
-              episode.season_number +
-              ":" +
-              episode.episode_number,
+          title:
+            'S'+
+            e.season_number+
+            ' E'+
+            e.episode_number+
+            ' - '+
+            e.name,
 
-            title:
-              "S" +
-              episode.season_number +
-              " E" +
-              episode.episode_number +
-              " - " +
-              episode.name,
+          released:
+            e.air_date
+              ? e.air_date+
+                'T12:00:00.000Z'
+              : new Date().toISOString(),
 
-            released:
-              episode.air_date
-                ? episode.air_date +
-                  "T12:00:00.000Z"
-                : new Date().toISOString(),
+          thumbnail:
+            imageUrl(
+              e.still_path,
+              'w300'
+            ),
 
-            thumbnail:
-              imageUrl(
-                episode.still_path,
-                "w300"
-              ),
+          season:
+            e.season_number,
 
-            season:
-              episode.season_number,
+          episode:
+            e.episode_number,
 
-            episode:
-              episode.episode_number,
+          overview:
+            e.overview||''
 
-            overview:
-              episode.overview || ""
-
-          };
-
-        }
+        })
       );
 
 
+    /*
+    STATUS
+    */
+
+    let status='';
+
+    if(
+      d.status==='Ended'
+    ){
+
+      status=
+        '🔴 Ended';
+
+    }else if(
+      d.status==='Canceled'
+    ){
+
+      status=
+        '🔴 Canceled';
+
+    }else if(
+      d.status==='Returning Series' &&
+      d.next_episode_to_air
+    ){
+
+      const n=
+        d.next_episode_to_air;
+
+      status=
+        '🟢 Currently Airing\n'+
+        'Next Episode: S'+
+        n.season_number+
+        ' E'+
+        n.episode_number+
+        ' — '+
+        n.name+
+        '\nAirs: '+
+        formatDate(
+          n.air_date
+        );
+
+    }else if(
+      d.status==='Returning Series'
+    ){
+
+      status=
+        '🔵 Returning Series';
+
+    }else if(
+      d.status==='In Production'
+    ){
+
+      status=
+        '🟡 In Production';
+
+    }else if(
+      d.status==='Planned'
+    ){
+
+      status=
+        '⚪ Planned';
+
+    }
+
+
+    /*
+    SEASON PROGRESS
+    */
+
+    const today=
+      todayUTC();
+
+    const aired=
+      episodes.filter(
+        e=>
+          e.air_date &&
+          new Date(
+            e.air_date+
+            'T00:00:00Z'
+          )<=today
+      );
+
+    let progressSeason=null;
+
+    if(
+      d.next_episode_to_air
+    ){
+
+      progressSeason=
+        d.next_episode_to_air
+          .season_number;
+
+    }else if(
+      aired.length
+    ){
+
+      progressSeason=
+        Math.max(
+          ...aired.map(
+            e=>
+              e.season_number
+          )
+        );
+
+    }else if(
+      seasons.length
+    ){
+
+      progressSeason=
+        seasons[
+          seasons.length-1
+        ].season_number;
+
+    }
+
+    let progress='';
+
+    if(
+      progressSeason!==null
+    ){
+
+      const seasonEpisodes=
+        episodes.filter(
+          e=>
+            e.season_number===
+            progressSeason
+        );
+
+      const seasonAired=
+        seasonEpisodes.filter(
+          e=>
+            e.air_date &&
+            new Date(
+              e.air_date+
+              'T00:00:00Z'
+            )<=today
+        );
+
+      if(
+        seasonEpisodes.length
+      ){
+
+        progress=
+          '📊 Season '+
+          progressSeason+
+          ' — '+
+          seasonAired.length+
+          ' of '+
+          seasonEpisodes.length+
+          ' episodes aired';
+
+      }
+
+    }
+
     res.json({
 
-      meta: {
+      meta:{
 
         id:
-          "tmdb:" +
-          data.id,
+          'tmdb:'+d.id,
 
         type:
-          "series",
+          'series',
 
         name:
-          data.name,
+          d.name,
 
         poster:
           imageUrl(
-            data.poster_path
+            d.poster_path
           ),
 
         background:
           imageUrl(
-            data.backdrop_path,
-            "w1280"
+            d.backdrop_path,
+            'w1280'
           ),
 
         description:
-          (() => {
-
-            let statusText = "";
-
-
-            if(
-              data.status === "Ended"
-            ){
-
-              statusText =
-                "🔴 Ended";
-
-            }else if(
-              data.status === "Canceled"
-            ){
-
-              statusText =
-                "🔴 Canceled";
-
-            }else if(
-              data.status === "Returning Series" &&
-              data.next_episode_to_air
-            ){
-
-              const next =
-                data.next_episode_to_air;
-
-
-              statusText =
-                "🟢 Currently Airing" +
-                "\n" +
-                "Next Episode: S" +
-                next.season_number +
-                " E" +
-                next.episode_number +
-                " — " +
-                next.name +
-                "\n" +
-                "Airs: " +
-                formatDate(
-                  next.air_date
-                );
-
-            }else if(
-              data.status === "Returning Series"
-            ){
-
-              statusText =
-                "🔵 Returning Series";
-
-            }else if(
-              data.status === "In Production"
-            ){
-
-              statusText =
-                "🟡 In Production";
-
-            }else if(
-              data.status === "Planned"
-            ){
-
-              statusText =
-                "⚪ Planned";
-
-            }
-
-
-            const today =
-              new Date();
-
-
-            today.setUTCHours(
-              0,
-              0,
-              0,
-              0
-            );
-
-
-            const airedEpisodes =
-              episodes.filter(
-                episode =>
-                  episode.air_date &&
-                  new Date(
-                    episode.air_date +
-                    "T00:00:00Z"
-                  ) <= today
-              );
-
-
-            let progressSeasonNumber =
-              null;
-
-
-            if(
-              data.next_episode_to_air
-            ){
-
-              progressSeasonNumber =
-                data.next_episode_to_air
-                  .season_number;
-
-            }else if(
-              airedEpisodes.length > 0
-            ){
-
-              progressSeasonNumber =
-                Math.max(
-                  ...airedEpisodes.map(
-                    episode =>
-                      episode.season_number
-                  )
-                );
-
-            }else if(
-              seasons.length > 0
-            ){
-
-              progressSeasonNumber =
-                seasons[
-                  seasons.length - 1
-                ].season_number;
-
-            }
-
-
-            let progressText = "";
-
-
-            if(
-              progressSeasonNumber !== null
-            ){
-
-              const seasonEpisodes =
-                episodes.filter(
-                  episode =>
-                    episode.season_number ===
-                    progressSeasonNumber
-                );
-
-
-              const seasonAiredEpisodes =
-                seasonEpisodes.filter(
-                  episode =>
-                    episode.air_date &&
-                    new Date(
-                      episode.air_date +
-                      "T00:00:00Z"
-                    ) <= today
-                );
-
-
-              if(
-                seasonEpisodes.length > 0
-              ){
-
-                progressText =
-                  "📊 Season " +
-                  progressSeasonNumber +
-                  " — " +
-                  seasonAiredEpisodes.length +
-                  " of " +
-                  seasonEpisodes.length +
-                  " episodes aired";
-
-              }
-
-            }
-
-
-            const overview =
-              data.overview || "";
-
-
-            const detailsParts = [];
-
-
-            if(statusText){
-
-              detailsParts.push(
-                statusText
-              );
-
-            }
-
-
-            if(progressText){
-
-              detailsParts.push(
-                progressText
-              );
-
-            }
-
-
-            if(overview){
-
-              detailsParts.push(
-                overview
-              );
-
-            }
-
-
-            return detailsParts.join(
-              "\n\n"
-            );
-
-          })(),
+          [
+            status,
+            progress,
+            d.overview||''
+          ]
+            .filter(Boolean)
+            .join('\n\n'),
 
         releaseInfo:
-          data.first_air_date
-            ? data.first_air_date.substring(0,4) + "-"
+          d.first_air_date
+            ? d.first_air_date.slice(0,4)+'-'
             : undefined,
 
-        videos:
-          videos
+        videos
 
       }
 
     });
 
-  }catch(error){
+  }catch(e){
 
     console.error(
-      error.response
-        ? error.response.data
-        : error.message
+      e.response?.data||
+      e.message
     );
 
     res.status(500).json({
       error:
-        "Failed to load show metadata"
+        'Failed to load show metadata'
     });
 
   }
@@ -3385,28 +2683,13 @@ META ROUTES
 */
 
 app.get(
-  "/meta/series/:id.json",
-  async (req,res) => {
-
-    await sendMeta(
-      req,
-      res
-    );
-
-  }
+  '/meta/series/:id.json',
+  sendMeta
 );
 
-
 app.get(
-  "/:config/meta/series/:id.json",
-  async (req,res) => {
-
-    await sendMeta(
-      req,
-      res
-    );
-
-  }
+  '/:config/meta/series/:id.json',
+  sendMeta
 );
 
 
@@ -3418,12 +2701,10 @@ START
 
 app.listen(
   PORT,
-  () => {
-
+  ()=>{
     console.log(
-      "My Shows addon running on port " +
+      'My Shows addon running on port '+
       PORT
     );
-
   }
 );
