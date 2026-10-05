@@ -3406,26 +3406,42 @@ META ROUTES
 */
 
 app.get(
-  "/meta/series/tmdb\\:tmdbId.json",
+  "/meta/series/:id.json",
   async (req,res) => {
+
+    const id =
+      String(req.params.id || "");
+
+    const tmdbId =
+      id.startsWith("tmdb:")
+        ? id.substring(5)
+        : id;
 
     await sendMeta(
       req,
       res,
-      req.params.tmdbId
+      tmdbId
     );
 
   }
 );
 
 app.get(
-  "/:config/meta/series/tmdb\\:tmdbId.json",
+  "/:config/meta/series/:id.json",
   async (req,res) => {
+
+    const id =
+      String(req.params.id || "");
+
+    const tmdbId =
+      id.startsWith("tmdb:")
+        ? id.substring(5)
+        : id;
 
     await sendMeta(
       req,
       res,
-      req.params.tmdbId
+      tmdbId
     );
 
   }
