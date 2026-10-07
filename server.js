@@ -2039,68 +2039,9 @@ async function sendMyShows(
         const data =
           item.data;
 
-        let description =
-          "";
+        const description =
+          data.overview || "";
 
-        if(
-          data.next_episode_to_air &&
-          data.next_episode_to_air.air_date
-        ){
-
-          description =
-            "Next Episode: S" +
-            data
-              .next_episode_to_air
-              .season_number +
-            " E" +
-            data
-              .next_episode_to_air
-              .episode_number +
-            " — " +
-            (
-              data
-                .next_episode_to_air
-                .name ||
-              "Upcoming Episode"
-            ) +
-            "\\n\\n" +
-            "📅 " +
-            formatDate(
-              data
-                .next_episode_to_air
-                .air_date
-            );
-
-        }else if(
-          data.last_episode_to_air &&
-          data.last_episode_to_air.air_date
-        ){
-
-          description =
-            "Last Episode: S" +
-            data
-              .last_episode_to_air
-              .season_number +
-            " E" +
-            data
-              .last_episode_to_air
-              .episode_number +
-            " — " +
-            (
-              data
-                .last_episode_to_air
-                .name ||
-              "Latest Episode"
-            ) +
-            "\\n\\n" +
-            "📅 Aired " +
-            formatDate(
-              data
-                .last_episode_to_air
-                .air_date
-            );
-
-        }
 
         return {
 
@@ -2248,7 +2189,7 @@ async function sendAiringThisWeek(
             episode.name ||
             "Upcoming Episode"
           ) +
-          "\\n\\n" +
+          " • " +
           "📅 Airs " +
           formatDate(
             episode.air_date
@@ -2441,21 +2382,18 @@ async function sendWhatsNext(
               ),
 
             description:
-              "Next episode: S" +
+              "⏭️ Next episode: S" +
               next.season_number +
               " E" +
               next.episode_number +
               " — " +
-              next.name +
+              (
+                next.name ||
+                "Upcoming Episode"
+              ) +
               " • " +
               formatDate(
                 next.air_date
-              ) +
-              (
-                next.overview
-                  ? " — " +
-                    next.overview
-                  : ""
               )
 
           };
@@ -2663,7 +2601,7 @@ async function sendRecentlyAired(
               episode.name ||
               "Latest Episode"
             ) +
-            "\\n\\n" +
+            " • " +
             "📅 " +
             relativeText
 
@@ -2817,7 +2755,7 @@ async function sendReturningSoon(
           formatDate(
             airDate
           ) +
-          "\\n\\n" +
+          " • " +
           "Season " +
           episode.season_number +
           " • Episode " +
@@ -2827,7 +2765,7 @@ async function sendReturningSoon(
             episode.name ||
             "Upcoming Episode"
           ) +
-          "\\n\\n" +
+          " • " +
           "📅 In " +
           days +
           " days"
@@ -3050,6 +2988,11 @@ async function sendMeta(
             season.season_number >= 0
         );
 
+    seasons.sort(
+      (a,b) =>
+        a.season_number - b.season_number
+    );
+
     let episodes = [];
 
     for(
@@ -3081,6 +3024,12 @@ async function sendMeta(
       }
 
     }
+
+    episodes.sort(
+      (a,b) =>
+        a.season_number - b.season_number ||
+        a.episode_number - b.episode_number
+    );
 
     const videos =
       episodes.map(
@@ -3158,7 +3107,7 @@ async function sendMeta(
       ){
 
         statusText +=
-          "\\n📅 Next episode: " +
+          " • 📅 Next episode: " +
           formatDate(
             data
               .next_episode_to_air
@@ -3349,7 +3298,7 @@ async function sendMeta(
 
         description:
           detailsParts.join(
-            "\\n\\n"
+            " • "
           ),
 
         releaseInfo:
@@ -3386,10 +3335,25 @@ async function sendMeta(
 
 }
 
+function cleanText(value){
+  if(typeof value !== "string"){
+    return value;
+  }
+  return value
+    .replace(/\\+n/g, " • ")
+    .replace(/\/n/g, " • ")
+    .replace(/[\r\n]+/g, " • ")
+    .replace(/(\s*•\s*){2,}/g, " • ");
+}
+
 function returnMeta(
   res,
   meta
 ){
+
+  if(meta && typeof meta.description === "string"){
+    meta.description = cleanText(meta.description);
+  }
 
   res.json({
     meta:
