@@ -3000,16 +3000,35 @@ async function sendMeta(
 
     }
 
+    // Fetch EVERY season from TMDB, processed in ascending season order.
+    // Episode order within each season is left exactly as TMDB returns it.
+    const seasonList =
+      (data.seasons || [])
+        .filter(
+          season =>
+            season.season_number >= 0
+        )
+        .sort(
+          (a,b) =>
+            a.season_number -
+            b.season_number
+        );
+
     let episodes = [];
 
-    if(seasonNumber){
+    for(const season of seasonList){
 
       try{
 
-        episodes =
+        const seasonEpisodes =
           await getSeasonEpisodes(
             tmdbId,
-            seasonNumber
+            season.season_number
+          );
+
+        episodes =
+          episodes.concat(
+            seasonEpisodes
           );
 
       }catch(error){
@@ -3017,7 +3036,7 @@ async function sendMeta(
         console.error(
           "Season error",
           tmdbId,
-          seasonNumber,
+          season.season_number,
           error.message
         );
 
