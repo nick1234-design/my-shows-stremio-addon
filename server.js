@@ -2988,11 +2988,6 @@ async function sendMeta(
             season.season_number >= 0
         );
 
-    seasons.sort(
-      (a,b) =>
-        a.season_number - b.season_number
-    );
-
     let episodes = [];
 
     for(
@@ -3024,12 +3019,6 @@ async function sendMeta(
       }
 
     }
-
-    episodes.sort(
-      (a,b) =>
-        a.season_number - b.season_number ||
-        a.episode_number - b.episode_number
-    );
 
     const videos =
       episodes.map(
@@ -3077,11 +3066,6 @@ async function sendMeta(
           };
 
         }
-      )
-      .sort(
-        (a,b) =>
-          b.season - a.season ||
-          b.number - a.number
       );
 
     let statusText = "";
