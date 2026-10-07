@@ -3080,8 +3080,8 @@ async function sendMeta(
       )
       .sort(
         (a,b) =>
-          a.season - b.season ||
-          a.number - b.number
+          b.season - a.season ||
+          b.number - a.number
       );
 
     let statusText = "";
