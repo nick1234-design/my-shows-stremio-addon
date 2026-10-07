@@ -2981,30 +2981,35 @@ async function sendMeta(
         tmdbId
       );
 
-    const seasons =
-      (data.seasons || [])
-        .filter(
-          season =>
-            season.season_number >= 0
-        );
+    let seasonNumber = null;
+
+    if(data.next_episode_to_air){
+
+      seasonNumber =
+        data.next_episode_to_air.season_number;
+
+    }else if(data.last_episode_to_air){
+
+      seasonNumber =
+        data.last_episode_to_air.season_number;
+
+    }else if(data.number_of_seasons){
+
+      seasonNumber =
+        data.number_of_seasons;
+
+    }
 
     let episodes = [];
 
-    for(
-      const season of seasons
-    ){
+    if(seasonNumber){
 
       try{
 
-        const seasonEpisodes =
+        episodes =
           await getSeasonEpisodes(
             tmdbId,
-            season.season_number
-          );
-
-        episodes =
-          episodes.concat(
-            seasonEpisodes
+            seasonNumber
           );
 
       }catch(error){
@@ -3012,7 +3017,7 @@ async function sendMeta(
         console.error(
           "Season error",
           tmdbId,
-          season.season_number,
+          seasonNumber,
           error.message
         );
 
@@ -3029,39 +3034,39 @@ async function sendMeta(
             id:
               "tmdb:" +
               tmdbId +
-              ":s" +
+              ":" +
               episode.season_number +
-              ":e" +
+              ":" +
               episode.episode_number,
 
             title:
-              episode.name ||
-              "Episode " +
-              episode.episode_number,
-
-            season:
-              episode.season_number,
-
-            number:
-              episode.episode_number,
-
-            overview:
-              episode.overview ||
-              "",
+              "S" +
+              episode.season_number +
+              " E" +
+              episode.episode_number +
+              " - " +
+              episode.name,
 
             released:
               episode.air_date
-                ? new Date(
-                    episode.air_date +
-                    "T12:00:00Z"
-                  ).toISOString()
-                : undefined,
+                ? episode.air_date +
+                  "T12:00:00.000Z"
+                : new Date().toISOString(),
 
             thumbnail:
               imageUrl(
                 episode.still_path,
-                "w780"
-              )
+                "w300"
+              ),
+
+            season:
+              episode.season_number,
+
+            episode:
+              episode.episode_number,
+
+            overview:
+              episode.overview || ""
 
           };
 
@@ -3180,13 +3185,11 @@ async function sendMeta(
         );
 
     }else if(
-      seasons.length > 0
+      seasonNumber !== null
     ){
 
       progressSeasonNumber =
-        seasons[
-          seasons.length - 1
-        ].season_number;
+        seasonNumber;
 
     }
 
