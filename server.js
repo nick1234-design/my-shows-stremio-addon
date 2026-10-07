@@ -519,7 +519,7 @@ async function sendConfigure(
 
   res.send(`
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
 
@@ -530,71 +530,338 @@ async function sendConfigure(
   content="width=device-width,initial-scale=1"
 />
 
+<meta name="theme-color" content="#0b0e1f">
+
 <title>
 My Shows Configure
 </title>
 
 <style>
 
+:root{
+  --bg:#0a0d1e;
+  --card:rgba(255,255,255,.045);
+  --card-border:rgba(255,255,255,.08);
+  --text:#eef0ff;
+  --muted:#9aa0c3;
+  --accent:#8b5cf6;
+  --accent2:#6366f1;
+  --gold:#fbbf24;
+  --ok:#34d399;
+}
+
+*{
+  box-sizing:border-box;
+  -webkit-tap-highlight-color:transparent;
+}
+
+html,
 body{
-  font-family:Arial,sans-serif;
-  background:#111;
-  color:#fff;
   margin:0;
-  padding:16px;
+  max-width:100%;
+  overflow-x:hidden;
+}
+
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  color:var(--text);
+  background:
+    radial-gradient(900px 500px at 10% -10%,rgba(99,102,241,.28),transparent 60%),
+    radial-gradient(800px 500px at 100% 0%,rgba(139,92,246,.22),transparent 60%),
+    var(--bg);
+  background-attachment:fixed;
+  padding:20px 16px 48px;
+  line-height:1.4;
 }
 
 .container{
-  max-width:800px;
-  margin:auto;
+  max-width:760px;
+  margin:0 auto;
+}
+
+/* HEADER */
+
+.header{
+  display:flex;
+  align-items:center;
+  gap:18px;
+  margin-bottom:24px;
+  animation:fadeUp .5s ease both;
+}
+
+.logo{
+  position:relative;
+  flex:0 0 auto;
+  width:92px;
+  height:96px;
+}
+
+.crown{
+  position:absolute;
+  top:0;
+  left:50%;
+  width:38px;
+  height:26px;
+  margin-left:-19px;
+  z-index:3;
+  filter:drop-shadow(0 2px 6px rgba(251,191,36,.55));
+}
+
+.antenna{
+  position:absolute;
+  top:22px;
+  width:2px;
+  height:16px;
+  background:#c4b5fd;
+  border-radius:2px;
+  z-index:1;
+}
+
+.antenna.a1{
+  left:34px;
+  transform:rotate(-28deg);
+}
+
+.antenna.a2{
+  right:34px;
+  transform:rotate(28deg);
+}
+
+.tv{
+  position:absolute;
+  left:0;
+  right:0;
+  top:30px;
+  height:58px;
+  border-radius:14px;
+  background:linear-gradient(145deg,#7c5cf0,#4338ca);
+  box-shadow:0 8px 22px rgba(99,102,241,.45),inset 0 1px 0 rgba(255,255,255,.35);
+  display:flex;
+  align-items:center;
+  padding:6px;
+  gap:5px;
+  z-index:2;
+}
+
+.screen{
+  flex:1;
+  height:100%;
+  border-radius:9px;
+  background:radial-gradient(circle at 30% 20%,#2a2f6b,#0c1030);
+  box-shadow:inset 0 0 0 2px rgba(0,0,0,.45),inset 0 0 14px rgba(139,92,246,.45);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  font-weight:900;
+  font-size:11px;
+  line-height:1.05;
+  letter-spacing:1px;
+  color:#fff;
+  text-shadow:0 0 8px rgba(167,139,250,.9);
+}
+
+.knobs{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  width:10px;
+}
+
+.knobs i{
+  display:block;
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#fde68a,#d97706);
+}
+
+.leg{
+  position:absolute;
+  bottom:4px;
+  width:8px;
+  height:8px;
+  border-radius:2px;
+  background:#4338ca;
+  z-index:1;
+}
+
+.leg.l1{ left:16px; }
+.leg.l2{ right:16px; }
+
+.headText{
+  min-width:0;
+}
+
+.badge{
+  display:inline-block;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.6px;
+  text-transform:uppercase;
+  color:#c4b5fd;
+  background:rgba(139,92,246,.16);
+  border:1px solid rgba(139,92,246,.4);
+  padding:3px 10px;
+  border-radius:999px;
 }
 
 h1{
-  margin-bottom:6px;
+  margin:8px 0 4px;
+  font-size:34px;
+  line-height:1.1;
+  letter-spacing:-.5px;
 }
 
 .subtitle{
-  color:#aaa;
-  margin-bottom:20px;
+  color:var(--muted);
+  font-size:15px;
 }
+
+/* CARDS */
 
 .section{
-  background:#1b1b1b;
-  border-radius:12px;
-  padding:16px;
+  background:var(--card);
+  border:1px solid var(--card-border);
+  border-radius:20px;
+  padding:18px;
   margin-bottom:16px;
+  backdrop-filter:blur(6px);
+  animation:fadeUp .5s ease both;
 }
 
-input,
-select,
-button{
-  font-size:16px;
+.cardHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:4px;
 }
+
+h2{
+  margin:0;
+  font-size:19px;
+  letter-spacing:-.2px;
+}
+
+.cardSub{
+  color:var(--muted);
+  font-size:14px;
+  margin:2px 0 14px;
+}
+
+.count{
+  font-size:12px;
+  font-weight:700;
+  color:#c4b5fd;
+  background:rgba(139,92,246,.16);
+  padding:3px 10px;
+  border-radius:999px;
+}
+
+/* BUTTONS */
+
+button{
+  font-family:inherit;
+  font-size:16px;
+  border:0;
+  cursor:pointer;
+  min-height:44px;
+  padding:0 18px;
+  border-radius:12px;
+  color:#fff;
+  transition:transform .15s ease,filter .15s ease,background .15s ease;
+}
+
+button:active{
+  transform:scale(.97);
+}
+
+.btnPrimary,
+.searchButton,
+.addButton{
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  font-weight:700;
+  box-shadow:0 6px 18px rgba(99,102,241,.35);
+}
+
+.btnPrimary:hover,
+.searchButton:hover,
+.addButton:hover{
+  filter:brightness(1.12);
+}
+
+.btnGhost{
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.12);
+  font-weight:600;
+}
+
+.btnGhost:hover{
+  background:rgba(255,255,255,.14);
+}
+
+/* SEARCH */
 
 .searchRow{
   display:flex;
   gap:8px;
 }
 
-.searchRow input{
+.searchBox{
+  position:relative;
   flex:1;
-  padding:12px;
-  border-radius:8px;
-  border:1px solid #444;
-  background:#222;
-  color:#fff;
+  min-width:0;
 }
 
-button{
-  padding:11px 14px;
-  border:0;
-  border-radius:8px;
-  cursor:pointer;
+.searchBox svg{
+  position:absolute;
+  left:14px;
+  top:50%;
+  width:20px;
+  height:20px;
+  margin-top:-10px;
+  stroke:var(--muted);
+  pointer-events:none;
+}
+
+.searchBox input{
+  width:100%;
+  height:48px;
+  padding:0 14px 0 44px;
+  font-size:16px;
+  font-family:inherit;
+  color:var(--text);
+  background:rgba(8,10,28,.7);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:14px;
+  outline:none;
+  transition:border-color .15s ease,box-shadow .15s ease;
+}
+
+.searchBox input::placeholder{
+  color:#6f7599;
+}
+
+.searchBox input:focus{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(139,92,246,.25);
 }
 
 .searchButton{
-  background:#fff;
-  color:#111;
+  height:48px;
+  flex:0 0 auto;
+}
+
+.status{
+  color:var(--muted);
+  font-size:14px;
+  margin-top:10px;
+  min-height:0;
+}
+
+.status:empty{
+  display:none;
 }
 
 .results{
@@ -605,90 +872,409 @@ button{
   display:flex;
   align-items:center;
   gap:12px;
-  background:#222;
+  background:rgba(8,10,28,.55);
+  border:1px solid rgba(255,255,255,.06);
   padding:10px;
   margin-bottom:8px;
-  border-radius:8px;
+  border-radius:14px;
+  animation:fadeUp .3s ease both;
 }
 
-.result img{
-  width:55px;
-  height:80px;
+.result img,
+.result .noPoster{
+  width:46px;
+  height:68px;
+  flex:0 0 auto;
   object-fit:cover;
-  border-radius:6px;
+  border-radius:8px;
+  background:linear-gradient(145deg,#2a2f6b,#161a40);
 }
 
 .resultInfo{
   flex:1;
+  min-width:0;
 }
 
 .resultName{
-  font-weight:bold;
+  font-weight:700;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
 }
 
 .resultYear{
-  color:#aaa;
+  color:var(--muted);
   font-size:13px;
 }
 
 .addButton{
-  background:#fff;
-  color:#111;
+  min-width:68px;
+  padding:0 14px;
 }
 
-.selectedItem{
+.addButton.done{
+  background:rgba(52,211,153,.18);
+  color:var(--ok);
+  box-shadow:none;
+}
+
+/* POSTERS */
+
+.posterGrid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(104px,1fr));
+  gap:14px 12px;
+}
+
+.poster{
+  min-width:0;
+  animation:pop .3s ease both;
+}
+
+.posterArt{
+  position:relative;
+  aspect-ratio:2/3;
+  border-radius:14px;
+  overflow:hidden;
+  background:linear-gradient(145deg,#3b3f9e,#161a40);
+  box-shadow:0 8px 20px rgba(0,0,0,.4);
   display:flex;
-  justify-content:space-between;
   align-items:center;
-  gap:10px;
-  padding:10px;
-  background:#222;
-  border-radius:8px;
-  margin-bottom:8px;
+  justify-content:center;
+  font-size:34px;
+  font-weight:800;
+  color:rgba(255,255,255,.55);
+  transition:transform .2s ease,box-shadow .2s ease;
 }
 
-.remove{
-  background:#333;
-  color:#fff;
+.poster:hover .posterArt{
+  transform:translateY(-3px);
+  box-shadow:0 12px 26px rgba(99,102,241,.4);
 }
+
+.posterArt img{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+
+.posterX{
+  position:absolute;
+  top:6px;
+  right:6px;
+  z-index:2;
+  width:34px;
+  height:34px;
+  min-height:0;
+  padding:0;
+  border-radius:50%;
+  background:rgba(10,13,30,.82);
+  border:1px solid rgba(255,255,255,.25);
+  font-size:18px;
+  line-height:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.posterX:hover{
+  background:#ef4444;
+}
+
+.posterName{
+  margin-top:7px;
+  font-size:13px;
+  font-weight:600;
+  text-align:center;
+  overflow:hidden;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  word-break:break-word;
+}
+
+.empty{
+  color:var(--muted);
+  text-align:center;
+  padding:26px 12px;
+  border:1px dashed rgba(255,255,255,.18);
+  border-radius:14px;
+  font-size:14px;
+}
+
+/* TOGGLES */
 
 .switchRow{
   display:flex;
   justify-content:space-between;
   align-items:center;
-  padding:12px 0;
-  border-bottom:1px solid #333;
+  gap:12px;
+  min-height:52px;
+  padding:8px 0;
+  border-bottom:1px solid rgba(255,255,255,.07);
+  cursor:pointer;
 }
 
 .switchRow:last-child{
   border-bottom:0;
 }
 
-.install{
-  display:none;
-  background:#182318;
-  border:1px solid #365236;
-  padding:16px;
-  border-radius:10px;
+.switchRow span{
+  font-size:16px;
+  font-weight:600;
 }
 
-.installUrl{
-  word-break:break-all;
-  color:#aaa;
-  font-size:13px;
-  margin:10px 0;
+input.toggle{
+  -webkit-appearance:none;
+  appearance:none;
+  position:relative;
+  flex:0 0 auto;
+  width:50px;
+  height:30px;
+  margin:0;
+  border-radius:999px;
+  background:rgba(255,255,255,.14);
+  cursor:pointer;
+  transition:background .2s ease;
 }
 
-.primary{
+input.toggle::after{
+  content:"";
+  position:absolute;
+  top:3px;
+  left:3px;
+  width:24px;
+  height:24px;
+  border-radius:50%;
   background:#fff;
-  color:#111;
-  width:100%;
-  margin-top:10px;
+  box-shadow:0 2px 5px rgba(0,0,0,.4);
+  transition:transform .2s ease;
 }
 
-.status{
-  color:#aaa;
-  margin-top:8px;
+input.toggle:checked{
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+}
+
+input.toggle:checked::after{
+  transform:translateX(20px);
+}
+
+input.toggle:focus-visible{
+  outline:2px solid #c4b5fd;
+  outline-offset:2px;
+}
+
+/* SORT */
+
+.sortSelect{
+  position:absolute;
+  width:1px;
+  height:1px;
+  opacity:0;
+  pointer-events:none;
+}
+
+.sortGrid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+
+.sortChip{
+  text-align:left;
+  min-height:62px;
+  padding:10px 14px;
+  background:rgba(8,10,28,.55);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:14px;
+}
+
+.sortChip b{
+  display:block;
+  font-size:15px;
+}
+
+.sortChip small{
+  display:block;
+  color:var(--muted);
+  font-size:12px;
+  margin-top:2px;
+}
+
+.sortChip:hover{
+  border-color:rgba(139,92,246,.6);
+}
+
+.sortChip.active{
+  background:rgba(139,92,246,.2);
+  border-color:var(--accent);
+  box-shadow:0 0 0 1px var(--accent) inset;
+}
+
+/* YOUR ADDON */
+
+.addonCard{
+  background:linear-gradient(145deg,rgba(139,92,246,.22),rgba(99,102,241,.1));
+  border:1px solid rgba(139,92,246,.5);
+  box-shadow:0 12px 36px rgba(99,102,241,.22);
+}
+
+.urlBox{
+  word-break:break-all;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:13px;
+  color:#d6d9ff;
+  background:rgba(6,8,22,.75);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:12px;
+  padding:12px;
+  margin:4px 0 12px;
+}
+
+.urlBox.placeholder{
+  color:#6f7599;
+  font-family:inherit;
+}
+
+.btnRow{
+  display:flex;
+  gap:10px;
+}
+
+.btnRow button{
+  flex:1;
+  min-height:50px;
+}
+
+.btnRow .btnGhost{
+  flex:0 0 32%;
+}
+
+.toast{
+  color:var(--ok);
+  font-size:14px;
+  margin-top:10px;
+  min-height:18px;
+}
+
+/* ABOUT */
+
+.twoCol{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+}
+
+.twoCol .section{
+  margin-bottom:0;
+}
+
+.twoCol{
+  margin-bottom:16px;
+}
+
+.kv{
+  display:flex;
+  gap:10px;
+  padding:7px 0;
+  font-size:14px;
+  border-bottom:1px solid rgba(255,255,255,.06);
+}
+
+.kv:last-of-type{
+  border-bottom:0;
+}
+
+.kv b{
+  flex:0 0 84px;
+  color:var(--muted);
+  font-weight:600;
+}
+
+.kv span{
+  min-width:0;
+}
+
+.tips{
+  margin:0;
+  padding-left:20px;
+  font-size:14px;
+  color:#d2d5f2;
+}
+
+.tips li{
+  margin:6px 0;
+}
+
+.footer{
+  text-align:center;
+  color:#5f658c;
+  font-size:12px;
+  margin-top:20px;
+}
+
+@keyframes fadeUp{
+  from{ opacity:0; transform:translateY(10px); }
+  to{ opacity:1; transform:none; }
+}
+
+@keyframes pop{
+  from{ opacity:0; transform:scale(.92); }
+  to{ opacity:1; transform:none; }
+}
+
+@media (prefers-reduced-motion:reduce){
+  *{
+    animation:none !important;
+    transition:none !important;
+  }
+}
+
+@media (max-width:640px){
+  .twoCol{
+    grid-template-columns:1fr;
+  }
+}
+
+@media (max-width:480px){
+  body{
+    padding:16px 12px 40px;
+  }
+  .header{
+    gap:14px;
+  }
+  .logo{
+    transform:scale(.88);
+    transform-origin:left center;
+    margin-right:-10px;
+  }
+  h1{
+    font-size:28px;
+  }
+  .subtitle{
+    font-size:14px;
+  }
+  .section{
+    padding:16px 14px;
+    border-radius:18px;
+  }
+  .posterGrid{
+    grid-template-columns:repeat(3,1fr);
+    gap:12px 10px;
+  }
+  .searchButton{
+    padding:0 14px;
+  }
+  .btnRow{
+    flex-direction:column;
+  }
+  .btnRow .btnGhost{
+    flex:1;
+  }
 }
 
 </style>
@@ -699,27 +1285,78 @@ button{
 
 <div class="container">
 
+<div class="header">
+
+<div class="logo" aria-hidden="true">
+
+<svg class="crown" viewBox="0 0 38 26">
+<path d="M3 22 L1 6 L11 14 L19 2 L27 14 L37 6 L35 22 Z" fill="#fbbf24" stroke="#f59e0b" stroke-width="1.5" stroke-linejoin="round"/>
+<circle cx="1.5" cy="6" r="2.2" fill="#fde68a"/>
+<circle cx="19" cy="2.5" r="2.2" fill="#fde68a"/>
+<circle cx="36.5" cy="6" r="2.2" fill="#fde68a"/>
+</svg>
+
+<div class="antenna a1"></div>
+<div class="antenna a2"></div>
+
+<div class="tv">
+<div class="screen">MY<br>SHOWS</div>
+<div class="knobs"><i></i><i></i></div>
+</div>
+
+<div class="leg l1"></div>
+<div class="leg l2"></div>
+
+</div>
+
+<div class="headText">
+
+<span class="badge">
+Stremio Addon
+</span>
+
 <h1>
 My Shows
 </h1>
 
 <div class="subtitle">
-Choose the shows and Home rows you want.
+Track upcoming episodes and add shows you're watching.
+</div>
+
+</div>
+
 </div>
 
 <div class="section">
 
+<div class="cardHead">
 <h2>
-Add Shows
+Search &amp; Add Shows
 </h2>
+</div>
+
+<div class="cardSub">
+Find a show on TMDB and add it to your list.
+</div>
 
 <div class="searchRow">
+
+<div class="searchBox">
+
+<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<circle cx="11" cy="11" r="7"></circle>
+<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+</svg>
 
 <input
   id="searchInput"
   type="text"
   placeholder="Search TV shows..."
+  autocomplete="off"
+  enterkeyhint="search"
 />
+
+</div>
 
 <button
   class="searchButton"
@@ -745,9 +1382,16 @@ Search
 
 <div class="section">
 
+<div class="cardHead">
 <h2>
 My Shows
 </h2>
+<span id="showCount" class="count">0</span>
+</div>
+
+<div class="cardSub">
+Tap the X on a poster to remove a show.
+</div>
 
 <div
   id="selected"
@@ -761,7 +1405,11 @@ My Shows
 Home Rows
 </h2>
 
-<div class="switchRow">
+<div class="cardSub">
+Choose which sections appear on your Stremio home page.
+</div>
+
+<label class="switchRow">
 
 <span>
 My Shows
@@ -769,12 +1417,13 @@ My Shows
 
 <input
   type="checkbox"
+  class="toggle"
   id="row-myshows"
 />
 
-</div>
+</label>
 
-<div class="switchRow">
+<label class="switchRow">
 
 <span>
 What's Next?
@@ -782,12 +1431,13 @@ What's Next?
 
 <input
   type="checkbox"
+  class="toggle"
   id="row-whatsnext"
 />
 
-</div>
+</label>
 
-<div class="switchRow">
+<label class="switchRow">
 
 <span>
 Airing This Week
@@ -795,12 +1445,13 @@ Airing This Week
 
 <input
   type="checkbox"
+  class="toggle"
   id="row-airingthisweek"
 />
 
-</div>
+</label>
 
-<div class="switchRow">
+<label class="switchRow">
 
 <span>
 Recently Aired
@@ -808,12 +1459,13 @@ Recently Aired
 
 <input
   type="checkbox"
+  class="toggle"
   id="row-recentlyaired"
 />
 
-</div>
+</label>
 
-<div class="switchRow">
+<label class="switchRow">
 
 <span>
 Returning Soon
@@ -821,10 +1473,11 @@ Returning Soon
 
 <input
   type="checkbox"
+  class="toggle"
   id="row-returningsoon"
 />
 
-</div>
+</label>
 
 </div>
 
@@ -834,16 +1487,14 @@ Returning Soon
 My Shows Sort
 </h2>
 
+<div class="cardSub">
+Choose how shows are ordered in your My Shows row.
+</div>
+
 <select
   id="sortSelect"
-  style="
-    width:100%;
-    padding:12px;
-    border-radius:8px;
-    background:#222;
-    color:#fff;
-    border:1px solid #444;
-  "
+  class="sortSelect"
+  aria-label="My Shows sort"
 >
 
 <option value="myorder">
@@ -864,42 +1515,115 @@ Alphabetical
 
 </select>
 
+<div class="sortGrid">
+
+<button type="button" class="sortChip" data-sort="myorder" onclick="setSort('myorder')">
+<b>My Order</b><small>The order you added them</small>
+</button>
+
+<button type="button" class="sortChip" data-sort="nextepisode" onclick="setSort('nextepisode')">
+<b>Next Episode</b><small>Soonest episode first</small>
+</button>
+
+<button type="button" class="sortChip" data-sort="recentlyaired" onclick="setSort('recentlyaired')">
+<b>Recently Aired</b><small>Latest episode first</small>
+</button>
+
+<button type="button" class="sortChip" data-sort="alphabetical" onclick="setSort('alphabetical')">
+<b>Alphabetical</b><small>A to Z</small>
+</button>
+
+</div>
+
+</div>
+
+<div class="twoCol">
+
+<div class="section">
+
+<h2>
+About This Addon
+</h2>
+
+<div class="cardSub">
+&nbsp;
+</div>
+
+<div class="kv"><b>Name</b><span>My Shows</span></div>
+<div class="kv"><b>Type</b><span>Series</span></div>
+<div class="kv"><b>Author</b><span>Nick</span></div>
+<div class="kv"><b>Description</b><span>Track upcoming episodes and add shows you're watching.</span></div>
+
 </div>
 
 <div class="section">
 
-<button
-  class="primary"
-  type="button"
-  onclick="installAddon()"
+<h2>
+Quick Tips
+</h2>
+
+<div class="cardSub">
+&nbsp;
+</div>
+
+<ul class="tips">
+<li>Add shows using Search &amp; Add Shows.</li>
+<li>Remove shows with the X button.</li>
+<li>Choose which Home Rows appear.</li>
+<li>Change how My Shows are sorted.</li>
+<li>Update the addon in Stremio after making changes.</li>
+</ul>
+
+</div>
+
+</div>
+
+<div class="section addonCard">
+
+<h2>
+Your Addon
+</h2>
+
+<div class="cardSub">
+Your personalized addon link. It updates as you make changes.
+</div>
+
+<div
+  id="installUrl"
+  class="urlBox placeholder"
 >
-Install / Update Addon
+Add at least one show to generate your link.
+</div>
+
+<div class="btnRow">
+
+<button
+  class="btnGhost"
+  type="button"
+  onclick="copyUrl()"
+>
+Copy
+</button>
+
+<button
+  class="btnPrimary"
+  type="button"
+  onclick="updateInStremio()"
+>
+Update / Add to Stremio
 </button>
 
 </div>
 
 <div
-  id="installBox"
-  class="install"
->
-
-<h3>
-Addon Ready
-</h3>
-
-<div
-  id="installUrl"
-  class="installUrl"
+  id="toast"
+  class="toast"
 ></div>
 
-<button
-  class="primary"
-  type="button"
-  onclick="openStremio()"
->
-Open in Stremio
-</button>
+</div>
 
+<div class="footer">
+My Shows &bull; Stremio Addon
 </div>
 
 </div>
@@ -921,7 +1645,17 @@ const initialSort =
     initialSort
   )};
 
+const rowNames = [
+  "myshows",
+  "whatsnext",
+  "airingthisweek",
+  "recentlyaired",
+  "returningsoon"
+];
+
 let selected = [];
+
+let lastResults = [];
 
 function escapeHtml(
   value
@@ -953,14 +1687,6 @@ function escapeHtml(
 
 function initializeRows(){
 
-  const rowNames = [
-    "myshows",
-    "whatsnext",
-    "airingthisweek",
-    "recentlyaired",
-    "returningsoon"
-  ];
-
   rowNames.forEach(
     row => {
 
@@ -974,17 +1700,49 @@ function initializeRows(){
           row
         );
 
+      checkbox.addEventListener(
+        "change",
+        updatePreview
+      );
+
     }
   );
 
 }
 
-function initializeSort(){
+function setSort(
+  value
+){
 
   document.getElementById(
     "sortSelect"
   ).value =
-    initialSort;
+    value;
+
+  document.querySelectorAll(
+    ".sortChip"
+  ).forEach(
+    chip => {
+
+      chip.classList.toggle(
+        "active",
+        chip.getAttribute(
+          "data-sort"
+        ) === value
+      );
+
+    }
+  );
+
+  updatePreview();
+
+}
+
+function initializeSort(){
+
+  setSort(
+    initialSort
+  );
 
 }
 
@@ -995,37 +1753,59 @@ function renderSelected(){
       "selected"
     );
 
+  document.getElementById(
+    "showCount"
+  ).textContent =
+    String(
+      selected.length
+    );
+
   if(
     selected.length === 0
   ){
 
     box.innerHTML =
-      "<div style='color:#888'>No shows added yet.</div>";
+      "<div class='empty'>No shows added yet. Search above to add some.</div>";
+
+    updatePreview();
 
     return;
 
   }
 
   box.innerHTML =
+    "<div class='posterGrid'>" +
     selected.map(
-      show => \`
-        <div class="selectedItem">
+      show =>
+        "<div class='poster'>" +
+          "<div class='posterArt'>" +
+            escapeHtml(
+              (show.name || "?")
+                .trim()
+                .charAt(0)
+                .toUpperCase()
+            ) +
+            (
+              show.poster
+                ? "<img src='" +
+                  escapeHtml(show.poster) +
+                  "' alt='' loading='lazy' onerror='this.remove()'>"
+                : ""
+            ) +
+            "<button class='posterX' type='button' aria-label='Remove " +
+            escapeHtml(show.name) +
+            "' onclick='removeShow(" +
+            Number(show.id) +
+            ")'>&times;</button>" +
+          "</div>" +
+          "<div class='posterName'>" +
+            escapeHtml(show.name) +
+          "</div>" +
+        "</div>"
+    ).join("") +
+    "</div>";
 
-          <span>
-            \${escapeHtml(show.name)}
-          </span>
-
-          <button
-            class="remove"
-            type="button"
-            onclick="removeShow(\${show.id})"
-          >
-            Remove
-          </button>
-
-        </div>
-      \`
-    ).join("");
+  updatePreview();
 
 }
 
@@ -1045,7 +1825,8 @@ function removeShow(
 
 function addShow(
   id,
-  name
+  name,
+  poster
 ){
 
   if(
@@ -1061,10 +1842,90 @@ function addShow(
 
   selected.push({
     id:id,
-    name:name
+    name:name,
+    poster:poster || ""
   });
 
   renderSelected();
+
+}
+
+function addShowFromResult(
+  index,
+  button
+){
+
+  const show =
+    lastResults[index];
+
+  if(!show){
+    return;
+  }
+
+  addShow(
+    show.id,
+    show.name,
+    show.poster
+  );
+
+  button.textContent =
+    "Added";
+
+  button.classList.add(
+    "done"
+  );
+
+}
+
+function loadPosters(){
+
+  selected.forEach(
+    show => {
+
+      if(show.poster){
+        return;
+      }
+
+      fetch(
+        "/api/search?query=" +
+        encodeURIComponent(
+          show.name
+        )
+      )
+        .then(
+          response =>
+            response.json()
+        )
+        .then(
+          data => {
+
+            const match =
+              (data.results || [])
+                .find(
+                  item =>
+                    item.id === show.id
+                );
+
+            if(
+              match &&
+              match.poster
+            ){
+
+              show.poster =
+                match.poster;
+
+              renderSelected();
+
+            }
+
+          }
+        )
+        .catch(
+          () => {}
+        );
+
+    }
+  );
 
 }
 
@@ -1127,45 +1988,49 @@ async function searchShows(){
       data.results.length === 0
     ){
 
+      lastResults =
+        [];
+
       resultsBox.innerHTML =
-        "<div style='color:#888'>No shows found.</div>";
+        "<div class='empty'>No shows found.</div>";
 
       return;
 
     }
 
+    lastResults =
+      data.results;
+
     resultsBox.innerHTML =
       data.results.map(
-        show => \`
-          <div class="result">
+        (show, index) =>
+          "<div class='result'>" +
 
-            <img
-              src="\${show.poster || ""}"
-              alt=""
-            >
+            (
+              show.poster
+                ? "<img src='" +
+                  escapeHtml(show.poster) +
+                  "' alt=''>"
+                : "<div class='noPoster'></div>"
+            ) +
 
-            <div class="resultInfo">
+            "<div class='resultInfo'>" +
 
-              <div class="resultName">
-                \${escapeHtml(show.name)}
-              </div>
+              "<div class='resultName'>" +
+                escapeHtml(show.name) +
+              "</div>" +
 
-              <div class="resultYear">
-                \${escapeHtml(show.year || "")}
-              </div>
+              "<div class='resultYear'>" +
+                escapeHtml(show.year || "") +
+              "</div>" +
 
-            </div>
+            "</div>" +
 
-            <button
-              class="addButton"
-              type="button"
-              onclick="addShow(\${show.id}, \${JSON.stringify(show.name)})"
-            >
-              Add
-            </button>
+            "<button class='addButton' type='button' onclick='addShowFromResult(" +
+              index +
+              ", this)'>Add</button>" +
 
-          </div>
-        \`
+          "</div>"
       ).join("");
 
   }catch(error){
@@ -1181,29 +2046,27 @@ async function searchShows(){
 
 }
 
-function installAddon(){
+function buildInstall(
+  silent
+){
 
   if(
     selected.length === 0
   ){
 
-    alert(
-      "Add at least one show first."
-    );
+    if(!silent){
 
-    return;
+      alert(
+        "Add at least one show first."
+      );
+
+    }
+
+    return null;
 
   }
 
   const rows = [];
-
-  const rowNames = [
-    "myshows",
-    "whatsnext",
-    "airingthisweek",
-    "recentlyaired",
-    "returningsoon"
-  ];
 
   rowNames.forEach(
     row => {
@@ -1228,11 +2091,15 @@ function installAddon(){
 
   if(rows.length === 0){
 
-    alert(
-      "Choose at least one Home row."
-    );
+    if(!silent){
 
-    return;
+      alert(
+        "Choose at least one Home row."
+      );
+
+    }
+
+    return null;
 
   }
 
@@ -1268,18 +2135,83 @@ function installAddon(){
       "https://".length
     );
 
-  document.getElementById(
-    "installUrl"
-  ).textContent =
-    manifestUrl;
+  return {
+    manifestUrl:manifestUrl,
+    stremioUrl:stremioUrl
+  };
 
-  document.getElementById(
-    "installBox"
-  ).style.display =
-    "block";
+}
+
+function showUrl(
+  result
+){
+
+  const box =
+    document.getElementById(
+      "installUrl"
+    );
+
+  if(result){
+
+    box.textContent =
+      result.manifestUrl;
+
+    box.classList.remove(
+      "placeholder"
+    );
+
+  }else{
+
+    box.textContent =
+      "Add at least one show and one Home row to generate your link.";
+
+    box.classList.add(
+      "placeholder"
+    );
+
+  }
+
+}
+
+function updatePreview(){
+
+  const result =
+    buildInstall(
+      true
+    );
+
+  showUrl(
+    result
+  );
 
   window.stremioInstallUrl =
-    stremioUrl;
+    result
+      ? result.stremioUrl
+      : null;
+
+}
+
+function installAddon(){
+
+  const result =
+    buildInstall(
+      false
+    );
+
+  if(!result){
+
+    return false;
+
+  }
+
+  showUrl(
+    result
+  );
+
+  window.stremioInstallUrl =
+    result.stremioUrl;
+
+  return true;
 
 }
 
@@ -1295,6 +2227,132 @@ function openStremio(){
 
   window.location.href =
     window.stremioInstallUrl;
+
+}
+
+function updateInStremio(){
+
+  if(
+    installAddon()
+  ){
+
+    openStremio();
+
+  }
+
+}
+
+function setToast(
+  text
+){
+
+  const toast =
+    document.getElementById(
+      "toast"
+    );
+
+  toast.textContent =
+    text;
+
+  setTimeout(
+    () => {
+
+      toast.textContent =
+        "";
+
+    },
+    2500
+  );
+
+}
+
+function copyUrl(){
+
+  const result =
+    buildInstall(
+      false
+    );
+
+  if(!result){
+    return;
+  }
+
+  const text =
+    result.manifestUrl;
+
+  function fallback(){
+
+    const area =
+      document.createElement(
+        "textarea"
+      );
+
+    area.value =
+      text;
+
+    area.style.position =
+      "fixed";
+
+    area.style.opacity =
+      "0";
+
+    document.body.appendChild(
+      area
+    );
+
+    area.focus();
+
+    area.select();
+
+    let ok = false;
+
+    try{
+
+      ok =
+        document.execCommand(
+          "copy"
+        );
+
+    }catch(error){
+
+      ok = false;
+
+    }
+
+    document.body.removeChild(
+      area
+    );
+
+    setToast(
+      ok
+        ? "Link copied!"
+        : "Copy failed. Press and hold the link to copy it."
+    );
+
+  }
+
+  if(
+    navigator.clipboard &&
+    navigator.clipboard.writeText
+  ){
+
+    navigator.clipboard
+      .writeText(text)
+      .then(
+        () =>
+          setToast(
+            "Link copied!"
+          )
+      )
+      .catch(
+        fallback
+      );
+
+  }else{
+
+    fallback();
+
+  }
 
 }
 
@@ -1332,7 +2390,8 @@ async function loadExistingShows(){
         data.results.map(
           show => ({
             id:show.id,
-            name:show.name
+            name:show.name,
+            poster:""
           })
         );
 
@@ -1349,7 +2408,26 @@ async function loadExistingShows(){
 
   renderSelected();
 
+  loadPosters();
+
 }
+
+document.getElementById(
+  "searchInput"
+).addEventListener(
+  "keydown",
+  event => {
+
+    if(
+      event.key === "Enter"
+    ){
+
+      searchShows();
+
+    }
+
+  }
+);
 
 initializeRows();
 
