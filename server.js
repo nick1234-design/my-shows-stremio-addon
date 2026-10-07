@@ -19,6 +19,31 @@ app.use((req, res, next) => {
   next();
 });
 
+// Tell Stremio (and browsers) it may reuse catalog responses for a while.
+app.use((req, res, next) => {
+
+  if(req.path.includes("/catalog/")){
+
+    const originalJson = res.json.bind(res);
+
+    res.json = body => {
+
+      if(body && Array.isArray(body.metas)){
+        body.cacheMaxAge = 1800;
+        body.staleRevalidate = 3600;
+        res.setHeader("Cache-Control", "public, max-age=1800");
+      }
+
+      return originalJson(body);
+
+    };
+
+  }
+
+  next();
+
+});
+
 const DEFAULT_SHOWS = [
   {
     name: "The Drop: A Snowfall Saga",
@@ -344,25 +369,136 @@ function sortMyShows(
 
 }
 
+// Every server-side TMDB request gives up after 8 seconds instead of hanging.
+axios.defaults.timeout = 8000;
+
+/*
+====================================================
+TMDB CACHE
+- Fresh for 30 minutes
+- Identical in-flight requests are shared
+- If TMDB fails, a cached copy up to 24h old is served instead
+====================================================
+*/
+
+const CACHE_TTL_MS = 30 * 60 * 1000;
+const CACHE_STALE_MS = 24 * 60 * 60 * 1000;
+const CACHE_MAX_ENTRIES = 2000;
+
+const tmdbCache = new Map();
+const tmdbInflight = new Map();
+
+async function cachedTmdb(key, fetcher){
+
+  const now = Date.now();
+  const hit = tmdbCache.get(key);
+
+  if(hit && now - hit.time < CACHE_TTL_MS){
+    return hit.value;
+  }
+
+  if(tmdbInflight.has(key)){
+    return tmdbInflight.get(key);
+  }
+
+  const promise = (async () => {
+
+    try{
+
+      const value = await fetcher();
+
+      tmdbCache.delete(key);
+      tmdbCache.set(key, { value, time: Date.now() });
+
+      while(tmdbCache.size > CACHE_MAX_ENTRIES){
+        tmdbCache.delete(tmdbCache.keys().next().value);
+      }
+
+      return value;
+
+    }catch(error){
+
+      if(hit && now - hit.time < CACHE_STALE_MS){
+        console.error("TMDB error, serving stale copy of", key, error.message);
+        return hit.value;
+      }
+
+      throw error;
+
+    }finally{
+
+      tmdbInflight.delete(key);
+
+    }
+
+  })();
+
+  tmdbInflight.set(key, promise);
+
+  return promise;
+
+}
+
+// Runs fn over items with at most `limit` requests at once.
+async function mapLimit(items, limit, fn){
+
+  const results = new Array(items.length);
+  let next = 0;
+
+  async function worker(){
+    while(next < items.length){
+      const index = next++;
+      results[index] = await fn(items[index], index);
+    }
+  }
+
+  await Promise.all(
+    Array.from(
+      { length: Math.min(limit, items.length) },
+      worker
+    )
+  );
+
+  return results;
+
+}
+
+// Warms the cache for a list of shows in parallel. Failures are ignored here;
+// the normal per-show loops still log and skip them.
+async function prefetchShows(shows){
+
+  await mapLimit(
+    shows,
+    8,
+    show =>
+      getShowDetails(show.tmdbId).catch(() => null)
+  );
+
+}
+
 async function getShowDetails(
   tmdbId
 ){
 
-  const response =
-    await axios.get(
-      tmdbUrl(
-        "/tv/" +
-        tmdbId
-      ),
-      {
-        params:{
-          api_key:
-            TMDB_API_KEY
-        }
-      }
-    );
+  return cachedTmdb(
+    "show:" + tmdbId,
+    async () => {
 
-  return response.data;
+      const response =
+        await axios.get(
+          tmdbUrl("/tv/" + tmdbId),
+          {
+            params:{
+              api_key:
+                TMDB_API_KEY
+            }
+          }
+        );
+
+      return response.data;
+
+    }
+  );
 
 }
 
@@ -371,25 +507,32 @@ async function getSeasonEpisodes(
   seasonNumber
 ){
 
-  const response =
-    await axios.get(
-      tmdbUrl(
-        "/tv/" +
-        tmdbId +
-        "/season/" +
-        seasonNumber
-      ),
-      {
-        params:{
-          api_key:
-            TMDB_API_KEY
-        }
-      }
-    );
+  return cachedTmdb(
+    "season:" + tmdbId + ":" + seasonNumber,
+    async () => {
 
-  return (
-    response.data.episodes ||
-    []
+      const response =
+        await axios.get(
+          tmdbUrl(
+            "/tv/" +
+            tmdbId +
+            "/season/" +
+            seasonNumber
+          ),
+          {
+            params:{
+              api_key:
+                TMDB_API_KEY
+            }
+          }
+        );
+
+      return (
+        response.data.episodes ||
+        []
+      );
+
+    }
   );
 
 }
@@ -2641,6 +2784,10 @@ app.get(
             id > 0
         );
 
+      await prefetchShows(
+        ids.map(id => ({ tmdbId: id }))
+      );
+
       const results = [];
 
       for(
@@ -2809,7 +2956,7 @@ async function sendManifest(
       "com.nick1234.myshows",
 
     version:
-      "2.4.0",
+      "2.5.0",
 
     name:
       "My Shows",
@@ -2824,6 +2971,10 @@ async function sendManifest(
 
     types:[
       "series"
+    ],
+
+    idPrefixes:[
+      "tmdb:"
     ],
 
     behaviorHints:{
@@ -3017,6 +3168,8 @@ async function sendMyShows(
       config
     );
 
+  await prefetchShows(shows);
+
   const sort =
     getSortFromConfig(
       config
@@ -3203,6 +3356,8 @@ async function sendAiringThisWeek(
       config
     );
 
+  await prefetchShows(shows);
+
   const metas = [];
 
   for(
@@ -3355,6 +3510,8 @@ async function sendWhatsNext(
     getShowsFromConfig(
       config
     );
+
+  await prefetchShows(shows);
 
   const upcoming = [];
 
@@ -3582,6 +3739,8 @@ async function sendRecentlyAired(
         config
       );
 
+    await prefetchShows(shows);
+
     const metas = [];
 
     for(
@@ -3761,6 +3920,8 @@ async function sendReturningSoon(
     getShowsFromConfig(
       config
     );
+
+  await prefetchShows(shows);
 
   const metas = [];
 
@@ -4092,6 +4253,16 @@ async function sendMeta(
             b.season_number
         );
 
+    await mapLimit(
+      seasonList,
+      6,
+      season =>
+        getSeasonEpisodes(
+          tmdbId,
+          season.season_number
+        ).catch(() => null)
+    );
+
     let episodes = [];
 
     for(const season of seasonList){
@@ -4148,7 +4319,7 @@ async function sendMeta(
               episode.air_date
                 ? episode.air_date +
                   "T12:00:00.000Z"
-                : new Date().toISOString(),
+                : "2099-12-31T00:00:00.000Z",
 
             thumbnail:
               imageUrl(
