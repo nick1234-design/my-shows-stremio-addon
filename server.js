@@ -1355,6 +1355,20 @@ input.toggle:focus-visible{
   flex:0 0 32%;
 }
 
+.btnRow.calRow{
+  margin-top:10px;
+}
+
+.btnRow.calRow .btnGhost{
+  flex:1;
+}
+
+.calHint{
+  margin-top:8px;
+  font-size:13px;
+  opacity:.7;
+}
+
 .toast{
   color:var(--ok);
   font-size:14px;
@@ -1814,6 +1828,22 @@ Copy
 Update / Add to Stremio
 </button>
 
+</div>
+
+<div class="btnRow calRow">
+
+<button
+  class="btnGhost"
+  type="button"
+  onclick="copyCalendarUrl()"
+>
+Copy calendar link
+</button>
+
+</div>
+
+<div class="calHint">
+Episode calendar: in Google Calendar choose Add calendar &rarr; From URL and paste the link.
 </div>
 
 <div
@@ -2411,9 +2441,16 @@ function buildInstall(
       "https://".length
     );
 
+  const calendarUrl =
+    window.location.origin +
+    "/" +
+    config +
+    "/calendar.ics";
+
   return {
     manifestUrl:manifestUrl,
-    stremioUrl:stremioUrl
+    stremioUrl:stremioUrl,
+    calendarUrl:calendarUrl
   };
 
 }
@@ -2618,6 +2655,91 @@ function copyUrl(){
         () =>
           setToast(
             "Link copied!"
+          )
+      )
+      .catch(
+        fallback
+      );
+
+  }else{
+
+    fallback();
+
+  }
+
+}
+
+function copyCalendarUrl(){
+
+  const result =
+    buildInstall(
+      false
+    );
+
+  if(!result){
+    return;
+  }
+
+  const text =
+    result.calendarUrl;
+
+  function fallback(){
+
+    const area =
+      document.createElement(
+        "textarea"
+      );
+
+    area.value =
+      text;
+
+    area.style.position =
+      "fixed";
+
+    area.style.opacity =
+      "0";
+
+    document.body.appendChild(
+      area
+    );
+
+    area.focus();
+    area.select();
+
+    let ok = false;
+
+    try{
+      ok =
+        document.execCommand(
+          "copy"
+        );
+    }catch(error){
+      ok = false;
+    }
+
+    document.body.removeChild(
+      area
+    );
+
+    setToast(
+      ok
+        ? "Calendar link copied!"
+        : "Copy failed. Try again."
+    );
+
+  }
+
+  if(
+    navigator.clipboard &&
+    navigator.clipboard.writeText
+  ){
+
+    navigator.clipboard
+      .writeText(text)
+      .then(
+        () =>
+          setToast(
+            "Calendar link copied!"
           )
       )
       .catch(
@@ -3147,6 +3269,280 @@ app.get(
   }
 );
 
+
+/*
+====================================================
+CALENDAR FEED (.ics)
+Subscribe once in Google Calendar (Add calendar > From URL)
+and upcoming episodes of your shows appear as all-day events.
+====================================================
+*/
+
+function icsEscape(text){
+
+  return String(text || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/;/g, "\\;")
+    .replace(/,/g, "\\,")
+    .replace(/\r?\n/g, "\\n");
+
+}
+
+// Lines must be at most 75 bytes; longer ones are folded onto
+// continuation lines that start with a single space.
+function icsFold(line){
+
+  const parts = [];
+  let current = "";
+  let bytes = 0;
+  let limit = 75;
+
+  for(const char of line){
+
+    const size = Buffer.byteLength(char);
+
+    if(bytes + size > limit){
+      parts.push(current);
+      current = "";
+      bytes = 0;
+      limit = 74;
+    }
+
+    current += char;
+    bytes += size;
+
+  }
+
+  parts.push(current);
+
+  return parts.join("\r\n ");
+
+}
+
+// "2026-10-14" -> "20261014", optionally shifted by whole days.
+function icsDay(dateString, addDays){
+
+  const date = new Date(dateString + "T00:00:00Z");
+
+  date.setUTCDate(
+    date.getUTCDate() + (addDays || 0)
+  );
+
+  return date
+    .toISOString()
+    .slice(0, 10)
+    .replace(/-/g, "");
+
+}
+
+function pad2(number){
+
+  return String(number).padStart(2, "0");
+
+}
+
+async function sendCalendar(
+  req,
+  res,
+  config
+){
+
+  try{
+
+    if(!TMDB_API_KEY){
+      return res
+        .status(500)
+        .type("text/plain")
+        .send("TMDB_API_KEY is not configured");
+    }
+
+    const shows = getShowsFromConfig(config);
+
+    await prefetchShows(shows);
+
+    // Keep the last week too, so an episode doesn't vanish the day after it airs.
+    const cutoff =
+      new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10);
+
+    const events = [];
+
+    await mapLimit(
+      shows,
+      6,
+      async show => {
+
+        try{
+
+          const data =
+            await getShowDetails(show.tmdbId);
+
+          const next =
+            data.next_episode_to_air;
+
+          if(
+            !next ||
+            !next.air_date
+          ){
+            return;
+          }
+
+          let episodes;
+
+          try{
+            episodes =
+              await getSeasonEpisodes(
+                show.tmdbId,
+                next.season_number
+              );
+          }catch(error){
+            episodes = [next];
+          }
+
+          episodes.forEach(
+            episode => {
+
+              if(
+                !episode.air_date ||
+                !/^\d{4}-\d{2}-\d{2}$/.test(episode.air_date) ||
+                episode.air_date < cutoff
+              ){
+                return;
+              }
+
+              const code =
+                "S" + pad2(episode.season_number) +
+                "E" + pad2(episode.episode_number);
+
+              events.push({
+                uid:
+                  "tmdb-" + show.tmdbId + "-" + code.toLowerCase() +
+                  "@my-shows-addon",
+                date: episode.air_date,
+                summary:
+                  data.name + " " + code +
+                  (episode.name ? ": " + episode.name : ""),
+                description:
+                  episode.overview ||
+                  ("New episode of " + data.name + ".")
+              });
+
+            }
+          );
+
+        }catch(error){
+
+          console.error(
+            "Calendar: skipped show",
+            show.tmdbId,
+            error.message
+          );
+
+        }
+
+      }
+    );
+
+    events.sort(
+      (a, b) =>
+        a.date.localeCompare(b.date) ||
+        a.summary.localeCompare(b.summary)
+    );
+
+    const stamp =
+      new Date()
+        .toISOString()
+        .replace(/[-:]/g, "")
+        .replace(/\.\d{3}/, "");
+
+    const lines = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//My Shows//Stremio Addon//EN",
+      "CALSCALE:GREGORIAN",
+      "METHOD:PUBLISH",
+      "X-WR-CALNAME:My Shows",
+      "REFRESH-INTERVAL;VALUE=DURATION:PT6H",
+      "X-PUBLISHED-TTL:PT6H"
+    ];
+
+    events.forEach(
+      event => {
+
+        lines.push(
+          "BEGIN:VEVENT",
+          "UID:" + event.uid,
+          "DTSTAMP:" + stamp,
+          "DTSTART;VALUE=DATE:" + icsDay(event.date, 0),
+          "DTEND;VALUE=DATE:" + icsDay(event.date, 1),
+          "SUMMARY:" + icsEscape(event.summary),
+          "DESCRIPTION:" + icsEscape(event.description),
+          "TRANSP:TRANSPARENT",
+          "END:VEVENT"
+        );
+
+      }
+    );
+
+    lines.push("END:VCALENDAR");
+
+    res.setHeader(
+      "Content-Type",
+      "text/calendar; charset=utf-8"
+    );
+
+    res.setHeader(
+      "Content-Disposition",
+      "inline; filename=\"my-shows.ics\""
+    );
+
+    res.setHeader(
+      "Cache-Control",
+      "public, max-age=3600"
+    );
+
+    res.send(
+      lines.map(icsFold).join("\r\n") + "\r\n"
+    );
+
+  }catch(error){
+
+    console.error(
+      "Calendar error:",
+      error.message
+    );
+
+    res
+      .status(500)
+      .type("text/plain")
+      .send("Could not build calendar");
+
+  }
+
+}
+
+app.get(
+  "/calendar.ics",
+  async (req,res) => {
+    await sendCalendar(
+      req,
+      res,
+      ""
+    );
+  }
+);
+
+app.get(
+  "/:config/calendar.ics",
+  async (req,res) => {
+    await sendCalendar(
+      req,
+      res,
+      req.params.config
+    );
+  }
+);
 
 /*
 ====================================================
