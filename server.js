@@ -158,6 +158,7 @@ const DEFAULT_ROWS = [
 const ALL_ROWS = [
   "myshows",
   "whatsnext",
+  "airingtoday",
   "airingthisweek",
   "recentlyaired",
   "returningsoon"
@@ -245,6 +246,51 @@ function getSortFromConfig(
   return ALL_SORTS.includes(sort)
     ? sort
     : DEFAULT_SORT;
+
+}
+
+// 4th config part: "hideended" hides finished shows in the My Shows row.
+function getHideEndedFromConfig(
+  config
+){
+
+  if(
+    !config ||
+    !String(config).includes("~")
+  ){
+    return false;
+  }
+
+  return String(config)
+    .split("~")[3] === "hideended";
+
+}
+
+// "Today" for the Airing Today row. Set a TIMEZONE environment variable
+// (for example America/New_York) so the day rolls over at local midnight.
+const TIMEZONE = process.env.TIMEZONE || "UTC";
+
+function todayInTimezone(){
+
+  try{
+
+    return new Intl.DateTimeFormat(
+      "en-CA",
+      {
+        timeZone: TIMEZONE,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }
+    ).format(new Date());
+
+  }catch(error){
+
+    return new Date()
+      .toISOString()
+      .slice(0, 10);
+
+  }
 
 }
 
@@ -657,6 +703,11 @@ async function sendConfigure(
 
   const initialSort =
     getSortFromConfig(
+      config
+    );
+
+  const initialHideEnded =
+    getHideEndedFromConfig(
       config
     );
 
@@ -1369,6 +1420,26 @@ input.toggle:focus-visible{
   opacity:.7;
 }
 
+.importBox{
+  width:100%;
+  min-height:76px;
+  margin-bottom:10px;
+  padding:12px 14px;
+  font-size:16px;
+  font-family:inherit;
+  color:var(--text);
+  background:rgba(8,10,28,.7);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:14px;
+  resize:vertical;
+  box-sizing:border-box;
+}
+
+.importBox:focus{
+  outline:none;
+  border-color:var(--accent);
+}
+
 .toast{
   color:var(--ok);
   font-size:14px;
@@ -1651,6 +1722,16 @@ What's Next?
 />
 
 </label>
+<label class="switchRow">
+<span>
+Airing Today
+</span>
+<input
+  type="checkbox"
+  class="toggle"
+  id="row-airingtoday"
+/>
+</label>
 
 <label class="switchRow">
 
@@ -1793,6 +1874,70 @@ Quick Tips
 
 </div>
 
+<div class="section">
+
+<h2>
+Filters
+</h2>
+
+<div class="cardSub">
+Applies to the My Shows row.
+</div>
+
+<label class="switchRow">
+<span>
+Hide ended &amp; canceled shows
+</span>
+<input
+  type="checkbox"
+  class="toggle"
+  id="hideEnded"
+  onchange="updatePreview()"
+  ${initialHideEnded ? "checked" : ""}
+/>
+</label>
+
+</div>
+
+<div class="section">
+
+<h2>
+Backup &amp; Import
+</h2>
+
+<div class="cardSub">
+Copy your list to keep it safe. To restore it, paste the list, an old addon link, or TMDB show links below.
+</div>
+
+<textarea
+  id="importBox"
+  class="importBox"
+  rows="3"
+  placeholder="Paste show IDs, an old addon link, or TMDB links"
+></textarea>
+
+<div class="btnRow">
+
+<button
+  class="btnGhost"
+  type="button"
+  onclick="exportList()"
+>
+Copy my list
+</button>
+
+<button
+  class="btnPrimary"
+  type="button"
+  onclick="importList()"
+>
+Import
+</button>
+
+</div>
+
+</div>
+
 <div class="section addonCard">
 
 <h2>
@@ -1879,6 +2024,7 @@ const initialSort =
 const rowNames = [
   "myshows",
   "whatsnext",
+  "airingtoday",
   "airingthisweek",
   "recentlyaired",
   "returningsoon"
@@ -2427,7 +2573,14 @@ function buildInstall(
     "~" +
     rows.join(",") +
     "~" +
-    sort;
+    sort +
+    (
+      document.getElementById(
+        "hideEnded"
+      ).checked
+        ? "~hideended"
+        : ""
+    );
 
   const manifestUrl =
     window.location.origin +
@@ -2749,6 +2902,317 @@ function copyCalendarUrl(){
   }else{
 
     fallback();
+
+  }
+
+}
+
+function copyText(
+  text,
+  message
+){
+
+  function fallback(){
+
+    const area =
+      document.createElement(
+        "textarea"
+      );
+
+    area.value =
+      text;
+
+    area.style.position =
+      "fixed";
+
+    area.style.opacity =
+      "0";
+
+    document.body.appendChild(
+      area
+    );
+
+    area.focus();
+    area.select();
+
+    let ok = false;
+
+    try{
+      ok =
+        document.execCommand(
+          "copy"
+        );
+    }catch(error){
+      ok = false;
+    }
+
+    document.body.removeChild(
+      area
+    );
+
+    setToast(
+      ok
+        ? message
+        : "Copy failed. Try again."
+    );
+
+  }
+
+  if(
+    navigator.clipboard &&
+    navigator.clipboard.writeText
+  ){
+
+    navigator.clipboard
+      .writeText(text)
+      .then(
+        () =>
+          setToast(
+            message
+          )
+      )
+      .catch(
+        fallback
+      );
+
+  }else{
+
+    fallback();
+
+  }
+
+}
+
+function exportList(){
+
+  if(
+    selected.length === 0
+  ){
+    setToast(
+      "Add at least one show first."
+    );
+    return;
+  }
+
+  copyText(
+    selected
+      .map(
+        show =>
+          show.id
+      )
+      .join(","),
+    "List copied!"
+  );
+
+}
+
+function parseImportIds(
+  text
+){
+
+  let found = [];
+
+  // An old addon link or config string: ids come before the first tilde.
+  const configMatch =
+    text.match(
+      /([0-9,]+)~/
+    );
+
+  if(configMatch){
+
+    found =
+      configMatch[1]
+        .split(",");
+
+  }else{
+
+    // TMDB links such as themoviedb.org/tv/1399-game-of-thrones
+    const tvPattern =
+      new RegExp(
+        "tv/([0-9]+)",
+        "g"
+      );
+
+    let match =
+      tvPattern.exec(text);
+
+    while(match !== null){
+
+      found.push(
+        match[1]
+      );
+
+      match =
+        tvPattern.exec(text);
+
+    }
+
+    // Otherwise any numbers: a copied list or one ID per line.
+    if(found.length === 0){
+
+      found =
+        text.match(
+          /[0-9]+/g
+        ) || [];
+
+    }
+
+  }
+
+  const seen = {};
+
+  return found.filter(
+    id => {
+
+      if(
+        id.length === 0 ||
+        id.length > 8 ||
+        seen[id]
+      ){
+        return false;
+      }
+
+      seen[id] = true;
+
+      return true;
+
+    }
+  );
+
+}
+
+async function importList(){
+
+  const box =
+    document.getElementById(
+      "importBox"
+    );
+
+  const ids =
+    parseImportIds(
+      box.value || ""
+    ).filter(
+      id =>
+        !selected.some(
+          show =>
+            show.id === Number(id)
+        )
+    );
+
+  if(
+    ids.length === 0
+  ){
+    setToast(
+      "No new shows found to import."
+    );
+    return;
+  }
+
+  const room =
+    100 - selected.length;
+
+  if(
+    room <= 0
+  ){
+    setToast(
+      "Your list is full (100 shows max)."
+    );
+    return;
+  }
+
+  const batch =
+    ids.slice(
+      0,
+      room
+    );
+
+  setToast(
+    "Importing..."
+  );
+
+  try{
+
+    const response =
+      await fetch(
+        "/api/shows?ids=" +
+        batch.join(",")
+      );
+
+    const data =
+      await response.json();
+
+    let added = 0;
+
+    if(
+      data.results &&
+      Array.isArray(
+        data.results
+      )
+    ){
+
+      data.results.forEach(
+        show => {
+
+          const id =
+            Number(show.id);
+
+          if(
+            !selected.some(
+              item =>
+                item.id === id
+            )
+          ){
+
+            selected.push({
+              id:id,
+              name:show.name,
+              poster:""
+            });
+
+            added++;
+
+          }
+
+        }
+      );
+
+    }
+
+    if(
+      added === 0
+    ){
+      setToast(
+        "Couldn't find those shows."
+      );
+      return;
+    }
+
+    box.value = "";
+
+    renderSelected();
+    loadPosters();
+
+    setToast(
+      "Imported " +
+      added +
+      (
+        added === 1
+          ? " show"
+          : " shows"
+      ) +
+      (
+        ids.length > batch.length
+          ? " (list limit reached)"
+          : ""
+      ) +
+      "."
+    );
+
+  }catch(error){
+
+    setToast(
+      "Import failed. Try again."
+    );
 
   }
 
@@ -3159,6 +3623,18 @@ async function sendManifest(
 
   if(
     rows.includes(
+      "airingtoday"
+    )
+  ){
+    catalogs.push({
+      type:"series",
+      id:"airingtoday",
+      name:"Airing Today"
+    });
+  }
+
+  if(
+    rows.includes(
       "airingthisweek"
     )
   ){
@@ -3211,7 +3687,7 @@ async function sendManifest(
       "com.nick1234.myshows",
 
     version:
-      "2.5.0",
+      "2.6.0",
 
     name:
       "My Shows",
@@ -3704,6 +4180,11 @@ async function sendMyShows(
       config
     );
 
+  const hideEnded =
+    getHideEndedFromConfig(
+      config
+    );
+
   const items = [];
 
   for(
@@ -3721,6 +4202,16 @@ async function sendMyShows(
         await getShowDetails(
           show.tmdbId
         );
+
+      if(
+        hideEnded &&
+        (
+          data.status === "Ended" ||
+          data.status === "Canceled"
+        )
+      ){
+        continue;
+      }
 
       let nextTime =
         null;
@@ -4022,6 +4513,128 @@ app.get(
   }
 );
 
+
+/*
+====================================================
+AIRING TODAY
+====================================================
+*/
+
+async function sendAiringToday(
+  req,
+  res,
+  config
+){
+
+  const shows =
+    getShowsFromConfig(
+      config
+    );
+
+  await prefetchShows(shows);
+
+  const today =
+    todayInTimezone();
+
+  const metas = [];
+
+  for(
+    const show of shows
+  ){
+
+    try{
+
+      const data =
+        await getShowDetails(
+          show.tmdbId
+        );
+
+      // An episode counts for the whole day: still upcoming or already out.
+      const episode =
+        [
+          data.next_episode_to_air,
+          data.last_episode_to_air
+        ].find(
+          item =>
+            item &&
+            item.air_date === today
+        );
+
+      if(!episode){
+        continue;
+      }
+
+      metas.push({
+        id:
+          "tmdb:" +
+          data.id,
+        type:
+          "series",
+        name:
+          data.name,
+        poster:
+          imageUrl(
+            data.poster_path
+          ),
+        background:
+          imageUrl(
+            data.backdrop_path,
+            "original"
+          ),
+        description:
+          "📺 S" +
+          episode.season_number +
+          " E" +
+          episode.episode_number +
+          " — " +
+          (
+            episode.name ||
+            "New Episode"
+          ) +
+          " • " +
+          "📅 Airs today"
+      });
+
+    }catch(error){
+
+      console.error(
+        "Airing Today error",
+        show.tmdbId,
+        error.message
+      );
+
+    }
+
+  }
+
+  res.json({
+    metas:
+      metas
+  });
+
+}
+
+app.get(
+  "/catalog/series/airingtoday.json",
+  async (req,res) => {
+    await sendAiringToday(
+      req,
+      res,
+      ""
+    );
+  }
+);
+
+app.get(
+  "/:config/catalog/series/airingtoday.json",
+  async (req,res) => {
+    await sendAiringToday(
+      req,
+      res,
+      req.params.config
+    );
+  }
+);
 
 /*
 ====================================================
