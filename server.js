@@ -4351,7 +4351,7 @@ async function sendAiringThisWeek(
 
   await prefetchShows(shows);
 
-  const metas = [];
+  const entries = [];
 
   for(
     const show of shows
@@ -4382,45 +4382,49 @@ async function sendAiringThisWeek(
       const episode =
         next;
 
-      metas.push({
+      entries.push({
+        airDate:
+          episode.air_date,
+        meta:{
 
-        id:
-          "tmdb:" +
-          data.id,
+          id:
+            "tmdb:" +
+            data.id,
 
-        type:
-          "series",
+          type:
+            "series",
 
-        name:
-          data.name,
+          name:
+            data.name,
 
-        poster:
-          imageUrl(
-            data.poster_path
-          ),
+          poster:
+            imageUrl(
+              data.poster_path
+            ),
 
-        background:
-          imageUrl(
-            data.backdrop_path,
-            "original"
-          ),
+          background:
+            imageUrl(
+              data.backdrop_path,
+              "original"
+            ),
 
-        description:
-          "📺 S" +
-          episode.season_number +
-          " E" +
-          episode.episode_number +
-          " — " +
-          (
-            episode.name ||
-            "Upcoming Episode"
-          ) +
-          " • " +
-          "📅 Airs " +
-          formatDate(
-            episode.air_date
-          )
+          description:
+            "📺 S" +
+            episode.season_number +
+            " E" +
+            episode.episode_number +
+            " — " +
+            (
+              episode.name ||
+              "Upcoming Episode"
+            ) +
+            " • " +
+            "📅 Airs " +
+            formatDate(
+              episode.air_date
+            )
 
+        }
       });
 
     }catch(error){
@@ -4435,27 +4439,20 @@ async function sendAiringThisWeek(
 
   }
 
-  metas.sort(
-    (a,b) => {
-
-      const aDate =
-        a.description.match(
-          /Airs (.+)/
-        );
-
-      const bDate =
-        b.description.match(
-          /Airs (.+)/
-        );
-
-      return 0;
-
-    }
+  // Soonest episode first; ties keep the order of your list.
+  entries.sort(
+    (a, b) =>
+      a.airDate.localeCompare(
+        b.airDate
+      )
   );
 
   res.json({
     metas:
-      metas
+      entries.map(
+        entry =>
+          entry.meta
+      )
   });
 
 }
