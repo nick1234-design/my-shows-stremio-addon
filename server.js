@@ -1128,6 +1128,64 @@ button:active{
   background:#ef4444;
 }
 
+.posterMove{
+  position:absolute;
+  bottom:6px;
+  z-index:2;
+  width:34px;
+  height:34px;
+  min-height:0;
+  padding:0;
+  border-radius:50%;
+  background:rgba(10,13,30,.82);
+  border:1px solid rgba(255,255,255,.25);
+  font-size:16px;
+  line-height:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.posterMove.left{
+  left:6px;
+}
+
+.posterMove.right{
+  right:6px;
+}
+
+.posterMove:disabled{
+  opacity:.25;
+}
+
+.posterNum{
+  position:absolute;
+  top:6px;
+  left:6px;
+  z-index:2;
+  min-width:22px;
+  height:22px;
+  padding:0 6px;
+  border-radius:11px;
+  background:rgba(10,13,30,.82);
+  font-size:12px;
+  font-weight:700;
+  color:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.posterGrid.still .poster{
+  animation:none;
+}
+
+.orderHint{
+  margin:0 0 10px;
+  font-size:13px;
+  opacity:.7;
+}
+
 .posterName{
   margin-top:7px;
   font-size:13px;
@@ -1877,7 +1935,7 @@ function setSort(
     }
   );
 
-  updatePreview();
+  renderSelected(true);
 
 }
 
@@ -1889,7 +1947,7 @@ function initializeSort(){
 
 }
 
-function renderSelected(){
+function renderSelected(still){
 
   const box =
     document.getElementById(
@@ -1916,10 +1974,29 @@ function renderSelected(){
 
   }
 
+  const sortValue =
+    document.getElementById(
+      "sortSelect"
+    ).value;
+
+  const canMove =
+    selected.length > 1;
+
+  const hint =
+    (
+      canMove &&
+      sortValue !== "myorder"
+    )
+      ? "<div class='orderHint'>Order only applies when sorting by My order.</div>"
+      : "";
+
   box.innerHTML =
-    "<div class='posterGrid'>" +
+    hint +
+    "<div class='posterGrid" +
+    (still === true ? " still" : "") +
+    "'>" +
     selected.map(
-      show =>
+      (show, index) =>
         "<div class='poster'>" +
           "<div class='posterArt'>" +
             escapeHtml(
@@ -1933,6 +2010,27 @@ function renderSelected(){
                 ? "<img src='" +
                   escapeHtml(show.poster) +
                   "' alt='' loading='lazy' onerror='this.remove()'>"
+                : ""
+            ) +
+            (
+              canMove
+                ? "<span class='posterNum'>" +
+                  (index + 1) +
+                  "</span>" +
+                  "<button class='posterMove left' type='button' aria-label='Move " +
+                  escapeHtml(show.name) +
+                  " earlier'" +
+                  (index === 0 ? " disabled" : "") +
+                  " onclick='moveShow(" +
+                  Number(show.id) +
+                  ",-1)'>&larr;</button>" +
+                  "<button class='posterMove right' type='button' aria-label='Move " +
+                  escapeHtml(show.name) +
+                  " later'" +
+                  (index === selected.length - 1 ? " disabled" : "") +
+                  " onclick='moveShow(" +
+                  Number(show.id) +
+                  ",1)'>&rarr;</button>"
                 : ""
             ) +
             "<button class='posterX' type='button' aria-label='Remove " +
@@ -1949,6 +2047,41 @@ function renderSelected(){
     "</div>";
 
   updatePreview();
+
+}
+
+function moveShow(
+  id,
+  delta
+){
+
+  const from =
+    selected.findIndex(
+      show =>
+        show.id === id
+    );
+
+  const to =
+    from + delta;
+
+  if(
+    from < 0 ||
+    to < 0 ||
+    to >= selected.length
+  ){
+    return;
+  }
+
+  const moved =
+    selected[from];
+
+  selected[from] =
+    selected[to];
+
+  selected[to] =
+    moved;
+
+  renderSelected(true);
 
 }
 
