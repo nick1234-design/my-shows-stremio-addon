@@ -4332,33 +4332,6 @@ async function sendMyShows(
 
 }
 
-app.get(
-  "/catalog/series/myshows.json",
-  async (req,res) => {
-
-    await sendMyShows(
-      req,
-      res,
-      ""
-    );
-
-  }
-);
-
-app.get(
-  "/:config/catalog/series/myshows.json",
-  async (req,res) => {
-
-    await sendMyShows(
-      req,
-      res,
-      req.params.config
-    );
-
-  }
-);
-
-
 /*
 ====================================================
 AIRING THIS WEEK
@@ -4487,33 +4460,6 @@ async function sendAiringThisWeek(
 
 }
 
-app.get(
-  "/catalog/series/airingthisweek.json",
-  async (req,res) => {
-
-    await sendAiringThisWeek(
-      req,
-      res,
-      ""
-    );
-
-  }
-);
-
-app.get(
-  "/:config/catalog/series/airingthisweek.json",
-  async (req,res) => {
-
-    await sendAiringThisWeek(
-      req,
-      res,
-      req.params.config
-    );
-
-  }
-);
-
-
 /*
 ====================================================
 AIRING TODAY
@@ -4613,28 +4559,6 @@ async function sendAiringToday(
   });
 
 }
-
-app.get(
-  "/catalog/series/airingtoday.json",
-  async (req,res) => {
-    await sendAiringToday(
-      req,
-      res,
-      ""
-    );
-  }
-);
-
-app.get(
-  "/:config/catalog/series/airingtoday.json",
-  async (req,res) => {
-    await sendAiringToday(
-      req,
-      res,
-      req.params.config
-    );
-  }
-);
 
 /*
 ====================================================
@@ -4781,33 +4705,6 @@ async function sendWhatsNext(
   });
 
 }
-
-app.get(
-  "/catalog/series/whatsnext.json",
-  async (req,res) => {
-
-    await sendWhatsNext(
-      req,
-      res,
-      ""
-    );
-
-  }
-);
-
-app.get(
-  "/:config/catalog/series/whatsnext.json",
-  async (req,res) => {
-
-    await sendWhatsNext(
-      req,
-      res,
-      req.params.config
-    );
-
-  }
-);
-
 
 /*
 ====================================================
@@ -5019,33 +4916,6 @@ async function sendRecentlyAired(
 
 }
 
-app.get(
-  "/catalog/series/recentlyaired.json",
-  async (req,res) => {
-
-    await sendRecentlyAired(
-      req,
-      res,
-      ""
-    );
-
-  }
-);
-
-app.get(
-  "/:config/catalog/series/recentlyaired.json",
-  async (req,res) => {
-
-    await sendRecentlyAired(
-      req,
-      res,
-      req.params.config
-    );
-
-  }
-);
-
-
 /*
 ====================================================
 RETURNING SOON
@@ -5171,177 +5041,6 @@ async function sendReturningSoon(
   });
 
 }
-
-app.get(
-  "/catalog/series/returningsoon.json",
-  async (req,res) => {
-
-    await sendReturningSoon(
-      req,
-      res,
-      ""
-    );
-
-  }
-);
-
-app.get(
-  "/:config/catalog/series/returningsoon.json",
-  async (req,res) => {
-
-    await sendReturningSoon(
-      req,
-      res,
-      req.params.config
-    );
-
-  }
-);
-
-
-/*
-====================================================
-PERSONALIZED CATALOG ROUTES
-====================================================
-*/
-
-app.get(
-  "/:config/catalog/series/myshows.json",
-  async (req,res) => {
-
-    await sendMyShows(
-      req,
-      res,
-      req.params.config
-    );
-
-  }
-);
-
-app.get(
-  "/:config/catalog/series/whatsnext.json",
-  async (req,res) => {
-
-    await sendWhatsNext(
-      req,
-      res,
-      req.params.config
-    );
-
-  }
-);
-
-app.get(
-  "/:config/catalog/series/airingthisweek.json",
-  async (req,res) => {
-
-    await sendAiringThisWeek(
-      req,
-      res,
-      req.params.config
-    );
-
-  }
-);
-
-app.get(
-  "/:config/catalog/series/recentlyaired.json",
-  async (req,res) => {
-
-    await sendRecentlyAired(
-      req,
-      res,
-      req.params.config
-    );
-
-  }
-);
-
-app.get(
-  "/:config/catalog/series/returningsoon.json",
-  async (req,res) => {
-
-    await sendReturningSoon(
-      req,
-      res,
-      req.params.config
-    );
-
-  }
-);
-
-
-/*
-====================================================
-GENERIC CATALOG ROUTES
-====================================================
-*/
-
-app.get(
-  "/catalog/series/myshows.json",
-  async (req,res) => {
-
-    await sendMyShows(
-      req,
-      res,
-      ""
-    );
-
-  }
-);
-
-app.get(
-  "/catalog/series/whatsnext.json",
-  async (req,res) => {
-
-    await sendWhatsNext(
-      req,
-      res,
-      ""
-    );
-
-  }
-);
-
-app.get(
-  "/catalog/series/airingthisweek.json",
-  async (req,res) => {
-
-    await sendAiringThisWeek(
-      req,
-      res,
-      ""
-    );
-
-  }
-);
-
-app.get(
-  "/catalog/series/recentlyaired.json",
-  async (req,res) => {
-
-    await sendRecentlyAired(
-      req,
-      res,
-      ""
-    );
-
-  }
-);
-
-app.get(
-  "/catalog/series/returningsoon.json",
-  async (req,res) => {
-
-    await sendReturningSoon(
-      req,
-      res,
-      ""
-    );
-
-  }
-);
-
 
 /*
 ====================================================
@@ -5813,6 +5512,43 @@ app.get(
   }
 );
 
+
+/*
+====================================================
+CATALOG ROUTES
+One table, two routes each: with a saved config in the URL, and without.
+====================================================
+*/
+
+const CATALOG_HANDLERS = {
+  myshows: sendMyShows,
+  whatsnext: sendWhatsNext,
+  airingtoday: sendAiringToday,
+  airingthisweek: sendAiringThisWeek,
+  recentlyaired: sendRecentlyAired,
+  returningsoon: sendReturningSoon
+};
+
+Object.keys(CATALOG_HANDLERS).forEach(
+  catalogId => {
+
+    const handler =
+      CATALOG_HANDLERS[catalogId];
+
+    app.get(
+      "/catalog/series/" + catalogId + ".json",
+      (req,res) =>
+        handler(req, res, "")
+    );
+
+    app.get(
+      "/:config/catalog/series/" + catalogId + ".json",
+      (req,res) =>
+        handler(req, res, req.params.config)
+    );
+
+  }
+);
 
 /*
 ====================================================
