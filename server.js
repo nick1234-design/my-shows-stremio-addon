@@ -19,19 +19,57 @@ app.use((req, res, next) => {
   next();
 });
 
-// Tell Stremio (and browsers) it may reuse catalog responses for a while.
+// Let Stremio, browsers, and Vercel's CDN reuse catalog and show-page
+// responses. The CDN copy survives cold starts, so repeat opens are instant.
+const CDN_CACHE =
+  "public, max-age=1800, s-maxage=1800, stale-while-revalidate=86400";
+
 app.use((req, res, next) => {
 
-  if(req.path.includes("/catalog/")){
+  const isCatalog = req.path.includes("/catalog/");
+  const isMeta = req.path.includes("/meta/");
+
+  if(isCatalog || isMeta){
 
     const originalJson = res.json.bind(res);
 
     res.json = body => {
 
-      if(body && Array.isArray(body.metas)){
+      const hasMetas =
+        !!body &&
+        Array.isArray(body.metas);
+
+      if(
+        isCatalog &&
+        hasMetas &&
+        body.metas.length > 0
+      ){
+
         body.cacheMaxAge = 1800;
         body.staleRevalidate = 3600;
-        res.setHeader("Cache-Control", "public, max-age=1800");
+        res.setHeader("Cache-Control", CDN_CACHE);
+
+      }else if(
+        isCatalog &&
+        hasMetas
+      ){
+
+        // Empty row: don't let a short-lived gap stick around.
+        body.cacheMaxAge = 60;
+        res.setHeader("Cache-Control", "public, max-age=60");
+
+      }else if(
+        isMeta &&
+        body &&
+        body.meta
+      ){
+
+        res.setHeader("Cache-Control", CDN_CACHE);
+
+      }else{
+
+        res.setHeader("Cache-Control", "no-store");
+
       }
 
       return originalJson(body);
@@ -250,7 +288,8 @@ function getSortFromConfig(
 }
 
 // 4th config part: "hideended" hides finished shows in the My Shows row.
-function getHideEndedFromConfig(
+// 4th config part: comma-separated flags, e.g. "hideended,imdb".
+function getFlagsFromConfig(
   config
 ){
 
@@ -258,11 +297,127 @@ function getHideEndedFromConfig(
     !config ||
     !String(config).includes("~")
   ){
-    return false;
+    return [];
   }
 
-  return String(config)
-    .split("~")[3] === "hideended";
+  return String(
+    String(config).split("~")[3] || ""
+  )
+    .split(",")
+    .map(
+      flag =>
+        flag.trim()
+    )
+    .filter(Boolean);
+
+}
+
+// "hideended" hides finished shows in the My Shows rows.
+function getHideEndedFromConfig(
+  config
+){
+
+  return getFlagsFromConfig(config)
+    .includes("hideended");
+
+}
+
+// "imdb" makes rows use IMDb IDs, so Cinemeta supplies the show page
+// and stream addons get the IDs they expect.
+function getUseImdbFromConfig(
+  config
+){
+
+  return getFlagsFromConfig(config)
+    .includes("imdb");
+
+}
+
+function catalogIdFor(
+  data,
+  config
+){
+
+  if(
+    getUseImdbFromConfig(config)
+  ){
+
+    const imdbId =
+      data.external_ids &&
+      data.external_ids.imdb_id;
+
+    if(
+      imdbId &&
+      /^tt\d+$/.test(imdbId)
+    ){
+      return imdbId;
+    }
+
+  }
+
+  return "tmdb:" + data.id;
+
+}
+
+// Second custom row: 5th config part is its show IDs, 6th is its name.
+const LIST2_NAME_MAX = 24;
+
+function cleanIdList(
+  part
+){
+
+  return String(part || "")
+    .split(",")
+    .map(
+      id =>
+        id.trim()
+    )
+    .filter(
+      id =>
+        /^\d+$/.test(id)
+    );
+
+}
+
+function getList2IdsFromConfig(
+  config
+){
+
+  if(!config){
+    return [];
+  }
+
+  return cleanIdList(
+    String(config).split("~")[4]
+  );
+
+}
+
+function getList2RawNameFromConfig(
+  config
+){
+
+  if(!config){
+    return "";
+  }
+
+  return String(
+    String(config).split("~")[5] || ""
+  )
+    .replace(/[<>\u0000-\u001f]/g, "")
+    .trim()
+    .slice(0, LIST2_NAME_MAX);
+
+}
+
+function getList2NameFromConfig(
+  config
+){
+
+  return (
+    getList2RawNameFromConfig(config) ||
+    "More Shows"
+  );
 
 }
 
@@ -294,6 +449,7 @@ function todayInTimezone(){
 
 }
 
+// Every show from both rows (used by What's Next, Airing, calendar, etc.).
 function getShowsFromConfig(
   config
 ){
@@ -302,24 +458,70 @@ function getShowsFromConfig(
     return DEFAULT_SHOWS;
   }
 
-  const showPart =
-    getShowPartFromConfig(
-      config
+  const ids = [];
+  const seen = new Set();
+
+  cleanIdList(
+    getShowPartFromConfig(config)
+  )
+    .concat(
+      getList2IdsFromConfig(config)
+    )
+    .forEach(
+      id => {
+
+        if(!seen.has(id)){
+          seen.add(id);
+          ids.push(id);
+        }
+
+      }
     );
 
-  const ids =
-    showPart
-      .split(",")
-      .map(
-        id =>
-          id.trim()
-      )
-      .filter(
-        id =>
-          /^\d+$/.test(id)
-      );
-
   if(ids.length === 0){
+    return DEFAULT_SHOWS;
+  }
+
+  return ids.map(
+    id => ({
+      tmdbId:
+        Number(id)
+    })
+  );
+
+}
+
+// Just one row's shows: 1 = My Shows, 2 = the second row.
+function getListShows(
+  config,
+  listNumber
+){
+
+  if(!config){
+    return listNumber === 1
+      ? DEFAULT_SHOWS
+      : [];
+  }
+
+  if(listNumber === 2){
+    return getList2IdsFromConfig(config)
+      .map(
+        id => ({
+          tmdbId:
+            Number(id)
+        })
+      );
+  }
+
+  const ids =
+    cleanIdList(
+      getShowPartFromConfig(config)
+    );
+
+  if(
+    ids.length === 0 &&
+    getList2IdsFromConfig(config).length === 0
+  ){
     return DEFAULT_SHOWS;
   }
 
@@ -485,6 +687,34 @@ async function cachedTmdb(key, fetcher){
 
 }
 
+function cacheIsFresh(
+  key
+){
+
+  const hit =
+    tmdbCache.get(key);
+
+  return (
+    !!hit &&
+    Date.now() - hit.time < CACHE_TTL_MS
+  );
+
+}
+
+function cachePut(
+  key,
+  value
+){
+
+  tmdbCache.delete(key);
+  tmdbCache.set(key, { value, time: Date.now() });
+
+  while(tmdbCache.size > CACHE_MAX_ENTRIES){
+    tmdbCache.delete(tmdbCache.keys().next().value);
+  }
+
+}
+
 // Runs fn over items with at most `limit` requests at once.
 async function mapLimit(items, limit, fn){
 
@@ -506,6 +736,93 @@ async function mapLimit(items, limit, fn){
   );
 
   return results;
+
+}
+
+// TMDB can return up to 20 seasons in one call (append_to_response), so a
+// long show needs one request instead of one per season. Anything that
+// doesn't arrive this way is simply fetched season by season afterwards.
+async function prefetchSeasons(
+  tmdbId,
+  seasonNumbers
+){
+
+  const needed =
+    seasonNumbers.filter(
+      number =>
+        !cacheIsFresh(
+          "season:" + tmdbId + ":" + number
+        )
+    );
+
+  if(needed.length < 2){
+    return;
+  }
+
+  const batches = [];
+
+  for(let i = 0; i < needed.length; i += 20){
+    batches.push(
+      needed.slice(i, i + 20)
+    );
+  }
+
+  await mapLimit(
+    batches,
+    3,
+    async batch => {
+
+      try{
+
+        const response =
+          await axios.get(
+            tmdbUrl("/tv/" + tmdbId),
+            {
+              params:{
+                api_key:
+                  TMDB_API_KEY,
+                append_to_response:
+                  batch
+                    .map(
+                      number =>
+                        "season/" + number
+                    )
+                    .join(",")
+              }
+            }
+          );
+
+        batch.forEach(
+          number => {
+
+            const season =
+              response.data["season/" + number];
+
+            if(
+              season &&
+              Array.isArray(season.episodes)
+            ){
+              cachePut(
+                "season:" + tmdbId + ":" + number,
+                season.episodes
+              );
+            }
+
+          }
+        );
+
+      }catch(error){
+
+        console.error(
+          "Combined season fetch failed, falling back",
+          tmdbId,
+          error.message
+        );
+
+      }
+
+    }
+  );
 
 }
 
@@ -536,7 +853,9 @@ async function getShowDetails(
           {
             params:{
               api_key:
-                TMDB_API_KEY
+                TMDB_API_KEY,
+              append_to_response:
+                "external_ids"
             }
           }
         );
@@ -708,6 +1027,21 @@ async function sendConfigure(
 
   const initialHideEnded =
     getHideEndedFromConfig(
+      config
+    );
+
+  const initialUseImdb =
+    getUseImdbFromConfig(
+      config
+    );
+
+  const initialIds2 =
+    getList2IdsFromConfig(
+      config
+    );
+
+  const initialList2Name =
+    getList2RawNameFromConfig(
       config
     );
 
@@ -1440,6 +1774,42 @@ input.toggle:focus-visible{
   border-color:var(--accent);
 }
 
+.nameInput{
+  min-height:0;
+  height:46px;
+  margin-bottom:0;
+  resize:none;
+}
+
+.listTabs{
+  display:flex;
+  gap:8px;
+  margin:12px 0 4px;
+}
+
+.listTab{
+  flex:1;
+  min-height:46px;
+  padding:8px 12px;
+  font-size:15px;
+  background:rgba(8,10,28,.55);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:14px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.listTab.active{
+  background:rgba(139,92,246,.2);
+  border-color:var(--accent);
+  box-shadow:0 0 0 1px var(--accent) inset;
+}
+
+.list2Name{
+  margin:8px 0 4px;
+}
+
 .toast{
   color:var(--ok);
   font-size:14px;
@@ -1675,6 +2045,47 @@ My Shows
 <span id="showCount" class="count">0</span>
 </div>
 
+<div class="listTabs">
+
+<button
+  type="button"
+  class="listTab active"
+  id="listTab1"
+  onclick="switchList(1)"
+>
+My Shows
+</button>
+
+<button
+  type="button"
+  class="listTab"
+  id="listTab2"
+  onclick="switchList(2)"
+>
+Row 2
+</button>
+
+</div>
+
+<div
+  id="list2NameBox"
+  class="list2Name"
+  style="display:none"
+>
+<input
+  type="text"
+  id="list2Name"
+  class="importBox nameInput"
+  maxlength="24"
+  placeholder="Row name, for example Anime"
+  oninput="onList2NameInput()"
+/>
+</div>
+
+<div class="cardSub">
+Shows you search for are added to the selected row. Row 2 shows up in Stremio as its own row once it has shows.
+</div>
+
 <div class="cardSub">
 Tap the X on a poster to remove a show.
 </div>
@@ -1902,6 +2313,31 @@ Hide ended &amp; canceled shows
 <div class="section">
 
 <h2>
+Streams
+</h2>
+
+<label class="switchRow">
+<span>
+Faster streams (use IMDb IDs)
+</span>
+<input
+  type="checkbox"
+  class="toggle"
+  id="useImdb"
+  onchange="updatePreview()"
+  ${initialUseImdb ? "checked" : ""}
+/>
+</label>
+
+<div class="cardSub">
+Opens shows with Cinemeta's page and the same IDs your stream addons expect. Watch history from before the switch won't carry over, and the next-episode info on the show page goes away. Tap Update / Add to Stremio to apply.
+</div>
+
+</div>
+
+<div class="section">
+
+<h2>
 Backup &amp; Import
 </h2>
 
@@ -2020,6 +2456,14 @@ const initialSort =
   ${JSON.stringify(
     initialSort
   )};
+const initialIds2 =
+  ${JSON.stringify(
+    initialIds2
+  )};
+const initialList2Name =
+  ${JSON.stringify(
+    initialList2Name
+  )};
 
 const rowNames = [
   "myshows",
@@ -2031,6 +2475,18 @@ const rowNames = [
 ];
 
 let selected = [];
+let activeList = 1;
+const stash = { 1: [], 2: [] };
+
+function getList(
+  number
+){
+
+  return number === activeList
+    ? selected
+    : stash[number];
+
+}
 
 let lastResults = [];
 
@@ -2503,7 +2959,7 @@ function buildInstall(
 ){
 
   if(
-    selected.length === 0
+    getList(1).length + getList(2).length === 0
   ){
 
     if(!silent){
@@ -2561,26 +3017,80 @@ function buildInstall(
     ).value;
 
   const ids =
-    selected
+    getList(1)
       .map(
         show =>
           show.id
       )
       .join(",");
 
-  const config =
+  const flagList = [];
+
+  if(
+    document.getElementById(
+      "hideEnded"
+    ).checked
+  ){
+    flagList.push(
+      "hideended"
+    );
+  }
+
+  if(
+    document.getElementById(
+      "useImdb"
+    ).checked
+  ){
+    flagList.push(
+      "imdb"
+    );
+  }
+
+  const hideFlag =
+    flagList.join(",");
+
+  const ids2 =
+    getList(2)
+      .map(
+        show =>
+          show.id
+      )
+      .join(",");
+
+  let config =
     ids +
     "~" +
     rows.join(",") +
     "~" +
-    sort +
-    (
-      document.getElementById(
-        "hideEnded"
-      ).checked
-        ? "~hideended"
-        : ""
-    );
+    sort;
+
+  if(
+    ids2.length > 0
+  ){
+
+    config +=
+      "~" +
+      hideFlag +
+      "~" +
+      ids2 +
+      "~" +
+      encodeURIComponent(
+        sanitizeList2Name(
+          document.getElementById(
+            "list2Name"
+          ).value
+        )
+      );
+
+  }else if(
+    hideFlag
+  ){
+
+    config +=
+      "~" +
+      hideFlag;
+
+  }
 
   const manifestUrl =
     window.location.origin +
@@ -3218,46 +3728,161 @@ async function importList(){
 
 }
 
-async function loadExistingShows(){
+function sanitizeList2Name(
+  value
+){
+
+  return String(value || "")
+    .split("~").join("")
+    .split("/").join("")
+    .split("?").join("")
+    .split("#").join("")
+    .split("%").join("")
+    .replace(/[<>]/g, "")
+    .trim()
+    .slice(0, 24);
+
+}
+
+function updateListTabs(){
+
+  const name =
+    sanitizeList2Name(
+      document.getElementById(
+        "list2Name"
+      ).value
+    );
+
+  const tab1 =
+    document.getElementById(
+      "listTab1"
+    );
+
+  const tab2 =
+    document.getElementById(
+      "listTab2"
+    );
+
+  tab2.textContent =
+    name || "Row 2";
+
+  tab1.classList.toggle(
+    "active",
+    activeList === 1
+  );
+
+  tab2.classList.toggle(
+    "active",
+    activeList === 2
+  );
+
+  document.getElementById(
+    "list2NameBox"
+  ).style.display =
+    activeList === 2
+      ? "block"
+      : "none";
+
+}
+
+function onList2NameInput(){
+
+  updateListTabs();
+  updatePreview();
+
+}
+
+function switchList(
+  number
+){
 
   if(
-    initialIds.length === 0
+    number === activeList
+  ){
+    return;
+  }
+
+  stash[activeList] =
+    selected;
+
+  activeList =
+    number;
+
+  selected =
+    stash[number];
+
+  updateListTabs();
+  renderSelected(true);
+  loadPosters();
+
+}
+
+async function fetchShowList(
+  ids
+){
+
+  if(
+    ids.length === 0
+  ){
+    return [];
+  }
+
+  const response =
+    await fetch(
+      "/api/shows?ids=" +
+      ids.join(",")
+    );
+
+  const data =
+    await response.json();
+
+  if(
+    data.results &&
+    Array.isArray(
+      data.results
+    )
   ){
 
-    renderSelected();
-
-    return;
+    return data.results.map(
+      show => ({
+        id:show.id,
+        name:show.name,
+        poster:""
+      })
+    );
 
   }
 
+  return [];
+
+}
+
+async function loadExistingShows(){
+
+  document.getElementById(
+    "list2Name"
+  ).value =
+    initialList2Name;
+
+  updateListTabs();
+
   try{
 
-    const response =
-      await fetch(
-        "/api/shows?ids=" +
-        initialIds.join(",")
-      );
+    const lists =
+      await Promise.all([
+        fetchShowList(
+          initialIds
+        ),
+        fetchShowList(
+          initialIds2
+        )
+      ]);
 
-    const data =
-      await response.json();
+    selected =
+      lists[0];
 
-    if(
-      data.results &&
-      Array.isArray(
-        data.results
-      )
-    ){
-
-      selected =
-        data.results.map(
-          show => ({
-            id:show.id,
-            name:show.name,
-            poster:""
-          })
-        );
-
-    }
+    stash[2] =
+      lists[1];
 
   }catch(error){
 
@@ -3269,7 +3894,6 @@ async function loadExistingShows(){
   }
 
   renderSelected();
-
   loadPosters();
 
 }
@@ -3606,6 +4230,16 @@ async function sendManifest(
   }
 
   if(
+    getList2IdsFromConfig(config).length > 0
+  ){
+    catalogs.push({
+      type:"series",
+      id:"myshows2",
+      name:getList2NameFromConfig(config)
+    });
+  }
+
+  if(
     rows.includes(
       "whatsnext"
     )
@@ -3687,7 +4321,7 @@ async function sendManifest(
       "com.nick1234.myshows",
 
     version:
-      "2.6.0",
+      "2.8.0",
 
     name:
       "My Shows",
@@ -4165,12 +4799,14 @@ MY SHOWS
 async function sendMyShows(
   req,
   res,
-  config
+  config,
+  listNumber = 1
 ){
 
   const shows =
-    getShowsFromConfig(
-      config
+    getListShows(
+      config,
+      listNumber
     );
 
   await prefetchShows(shows);
@@ -4297,8 +4933,10 @@ async function sendMyShows(
         return {
 
           id:
-            "tmdb:" +
-            data.id,
+            catalogIdFor(
+              data,
+              config
+            ),
 
           type:
             "series",
@@ -4388,8 +5026,10 @@ async function sendAiringThisWeek(
         meta:{
 
           id:
-            "tmdb:" +
-            data.id,
+            catalogIdFor(
+              data,
+              config
+            ),
 
           type:
             "series",
@@ -4509,8 +5149,10 @@ async function sendAiringToday(
 
       metas.push({
         id:
-          "tmdb:" +
-          data.id,
+          catalogIdFor(
+              data,
+              config
+            ),
         type:
           "series",
         name:
@@ -4655,8 +5297,10 @@ async function sendWhatsNext(
           return {
 
             id:
-              "tmdb:" +
-              data.id,
+              catalogIdFor(
+              data,
+              config
+            ),
 
             type:
               "series",
@@ -4844,8 +5488,10 @@ async function sendRecentlyAired(
         metas.push({
 
           id:
-            "tmdb:" +
-            data.id,
+            catalogIdFor(
+              data,
+              config
+            ),
 
           type:
             "series",
@@ -4978,8 +5624,10 @@ async function sendReturningSoon(
       metas.push({
 
         id:
-          "tmdb:" +
-          data.id,
+          catalogIdFor(
+              data,
+              config
+            ),
 
         type:
           "series",
@@ -5090,6 +5738,14 @@ async function sendMeta(
             a.season_number -
             b.season_number
         );
+
+    await prefetchSeasons(
+      tmdbId,
+      seasonList.map(
+        season =>
+          season.season_number
+      )
+    );
 
     await mapLimit(
       seasonList,
@@ -5519,6 +6175,7 @@ One table, two routes each: with a saved config in the URL, and without.
 
 const CATALOG_HANDLERS = {
   myshows: sendMyShows,
+  myshows2: (req, res, config) => sendMyShows(req, res, config, 2),
   whatsnext: sendWhatsNext,
   airingtoday: sendAiringToday,
   airingthisweek: sendAiringThisWeek,
