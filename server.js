@@ -288,7 +288,7 @@ function getSortFromConfig(
 }
 
 // 4th config part: "hideended" hides finished shows in the My Shows row.
-// 4th config part: comma-separated flags, e.g. "hideended,imdb".
+// 4th config part: comma-separated flags, e.g. "hideended,hidebreak,imdb".
 function getFlagsFromConfig(
   config
 ){
@@ -319,6 +319,84 @@ function getHideEndedFromConfig(
 
   return getFlagsFromConfig(config)
     .includes("hideended");
+
+}
+
+// "hidebreak" hides shows that are between seasons: not ended or canceled,
+// but with no new episode coming soon.
+function getHideBreakFromConfig(
+  config
+){
+
+  return getFlagsFromConfig(config)
+    .includes("hidebreak");
+
+}
+
+// A show is "between seasons" when it is a returning series with no
+// announced next episode date. Shows with a known return date stay visible.
+// A show that aired something recently is never treated as on a break,
+// because TMDB can lag a few days in listing the next episode.
+const RECENT_AIRED_DAYS = 14;
+
+function isBetweenSeasons(
+  data
+){
+
+  if(
+    !data ||
+    data.status !== "Returning Series"
+  ){
+    return false;
+  }
+
+  const today =
+    new Date();
+
+  today.setUTCHours(
+    0,
+    0,
+    0,
+    0
+  );
+
+  const dayMs =
+    24 * 60 * 60 * 1000;
+
+  const next =
+    data.next_episode_to_air;
+
+  if(
+    next &&
+    next.air_date
+  ){
+    return false;
+  }
+
+  const last =
+    data.last_episode_to_air;
+
+  if(
+    last &&
+    last.air_date
+  ){
+
+    const lastTime =
+      new Date(
+        last.air_date +
+        "T00:00:00Z"
+      ).getTime();
+
+    if(
+      today.getTime() - lastTime <=
+      RECENT_AIRED_DAYS * dayMs
+    ){
+      return false;
+    }
+
+  }
+
+  return true;
 
 }
 
@@ -1027,6 +1105,11 @@ async function sendConfigure(
 
   const initialHideEnded =
     getHideEndedFromConfig(
+      config
+    );
+
+  const initialHideBreak =
+    getHideBreakFromConfig(
       config
     );
 
@@ -2308,6 +2391,19 @@ Hide ended &amp; canceled shows
 />
 </label>
 
+<label class="switchRow">
+<span>
+Hide shows between seasons
+</span>
+<input
+  type="checkbox"
+  class="toggle"
+  id="hideBreak"
+  onchange="updatePreview()"
+  ${initialHideBreak ? "checked" : ""}
+/>
+</label>
+
 </div>
 
 <div class="section">
@@ -3033,6 +3129,16 @@ function buildInstall(
   ){
     flagList.push(
       "hideended"
+    );
+  }
+
+  if(
+    document.getElementById(
+      "hideBreak"
+    ).checked
+  ){
+    flagList.push(
+      "hidebreak"
     );
   }
 
@@ -4821,6 +4927,11 @@ async function sendMyShows(
       config
     );
 
+  const hideBreak =
+    getHideBreakFromConfig(
+      config
+    );
+
   const items = [];
 
   for(
@@ -4845,6 +4956,13 @@ async function sendMyShows(
           data.status === "Ended" ||
           data.status === "Canceled"
         )
+      ){
+        continue;
+      }
+
+      if(
+        hideBreak &&
+        isBetweenSeasons(data)
       ){
         continue;
       }
