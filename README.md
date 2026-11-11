@@ -10,6 +10,18 @@ Pick your shows once, and get clean rows on your Stremio home screen that show w
 
 ✨ Features
 
+**New in v3.0.0**
+- Full JSON backup and restore for both custom show lists and settings
+- Undo the last removal or row clear
+- Clear the active list with one tap
+- Duplicate protection across both lists and a 100-show-per-row limit
+- Live debounced search, TMDB ID/TV URL lookup, and show overviews in results
+- Hide season 0 specials from the episode guide
+- Consistent configured-timezone date calculations
+- Returning Soon limited to the next 90 days
+- Improved IMDb ID-prefix declaration and stricter API input validation
+
+
 Feature
 What it does
 🎬
