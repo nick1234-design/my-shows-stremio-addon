@@ -2127,6 +2127,7 @@ My Shows
   type="button"
   class="listTab active"
   id="listTab1"
+  onclick="switchList(1)"
 >
 My Shows
 </button>
@@ -2135,6 +2136,7 @@ My Shows
   type="button"
   class="listTab"
   id="listTab2"
+  onclick="switchList(2)"
 >
 Row 2
 </button>
@@ -3037,7 +3039,7 @@ async function searchShows(){
           "<div class='resultYear'>" + escapeHtml(show.year || "") + "</div>" +
           "<div class='resultYear'>" + escapeHtml(show.overview || "") + "</div>" +
         "</div>" +
-        "<button class='addButton' type='button' data-result-index='" + index + "'>Add</button>" +
+        "<button class='addButton' type='button' onclick='addShowFromResult(" + index + ", this)'>Add</button>" +
       "</div>"
     ).join("");
 
@@ -4010,81 +4012,65 @@ async function fetchShowList(
 
 async function loadExistingShows(){
 
-  document.getElementById("list2Name").value = initialList2Name;
-  updateListTabs();
+  document.getElementById(
+    "list2Name"
+  ).value =
+    initialList2Name;
 
-  // Keep any changes the user makes while the saved lists are loading.
-  const currentLists = {
-    1: (activeList === 1 ? selected : stash[1]).slice(),
-    2: (activeList === 2 ? selected : stash[2]).slice()
-  };
+  updateListTabs();
 
   try{
-    const lists = await Promise.all([
-      fetchShowList(initialIds),
-      fetchShowList(initialIds2)
-    ]);
 
-    const mergeLists = (saved, current) => {
-      const merged = saved.slice();
-      const seen = new Set(merged.map(show => Number(show.id)));
-      current.forEach(show => {
-        const id = Number(show.id);
-        if(!seen.has(id)){
-          seen.add(id);
-          merged.push(show);
-        }
-      });
-      return merged;
-    };
+    const lists =
+      await Promise.all([
+        fetchShowList(
+          initialIds
+        ),
+        fetchShowList(
+          initialIds2
+        )
+      ]);
 
-    stash[1] = mergeLists(lists[0], currentLists[1]);
-    stash[2] = mergeLists(lists[1], currentLists[2]);
-    selected = stash[activeList];
+    selected =
+      lists[0];
+
+    stash[2] =
+      lists[1];
+
   }catch(error){
-    console.error("Failed to load existing shows", error);
-    // Keep the current selection usable even if TMDB can't load saved IDs.
-    stash[activeList] = currentLists[activeList];
-    selected = stash[activeList];
+
+    console.error(
+      "Failed to load existing shows",
+      error
+    );
+
   }
 
-  updateListTabs();
   renderSelected();
   loadPosters();
+
 }
 
-// Search only when the user presses Search or Enter. This prevents an
-// automatic request from disabling the button just as it is being tapped.
+let searchDebounce = null;
+document.getElementById("searchInput").addEventListener("input", () => {
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => {
+    if(document.getElementById("searchInput").value.trim().length >= 2) searchShows();
+  }, 500);
+});
+
 document.getElementById("searchButton").addEventListener("click", event => {
   event.preventDefault();
+  clearTimeout(searchDebounce);
   searchShows();
 });
 
 document.getElementById("searchInput").addEventListener("keydown", event => {
   if(event.key === "Enter"){
     event.preventDefault();
+    clearTimeout(searchDebounce);
     searchShows();
   }
-});
-
-// Use explicit listeners for the two row tabs so switching rows does not
-// depend on inline HTML handlers.
-document.getElementById("listTab1").addEventListener("click", event => {
-  event.preventDefault();
-  switchList(1);
-});
-
-document.getElementById("listTab2").addEventListener("click", event => {
-  event.preventDefault();
-  switchList(2);
-});
-
-// Delegate Add clicks from dynamically rendered search results.
-document.getElementById("results").addEventListener("click", event => {
-  const button = event.target.closest(".addButton");
-  if(!button) return;
-  const index = Number(button.getAttribute("data-result-index"));
-  if(Number.isInteger(index)) addShowFromResult(index, button);
 });
 
 initializeRows();
