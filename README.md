@@ -19,7 +19,8 @@ Pick your shows once, and get clean rows on your Stremio home screen that show w
 - Hide season 0 specials from the episode guide
 - Consistent configured-timezone date calculations
 - Returning Soon limited to the next 90 days
-- Improved IMDb ID-prefix declaration and stricter API input validation
+- Manifest ID prefixes accurately advertise the TMDB metadata IDs this addon resolves, while IMDb mode stays compatible with Cinemeta
+- Stricter API input validation
 
 
 Feature
