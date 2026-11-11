@@ -2962,6 +2962,8 @@ async function searchShows(){
   const requestId = ++activeSearchRequest;
 
   if(!query){
+    button.disabled = false;
+    button.textContent = "Search";
     status.textContent = "Enter a show name.";
     resultsBox.innerHTML = "";
     input.focus();
@@ -4059,12 +4061,14 @@ document.getElementById("searchInput").addEventListener("input", () => {
 
 document.getElementById("searchButton").addEventListener("click", event => {
   event.preventDefault();
+  clearTimeout(searchDebounce);
   searchShows();
 });
 
 document.getElementById("searchInput").addEventListener("keydown", event => {
   if(event.key === "Enter"){
     event.preventDefault();
+    clearTimeout(searchDebounce);
     searchShows();
   }
 });
