@@ -324,13 +324,12 @@ function getHideEndedFromConfig(
 
 // "hidebreak" hides shows that are between seasons: not ended or canceled,
 // but with no new episode coming soon.
-function getHideBreakFromConfig(
-  config
-){
+function getHideBreakFromConfig(config){
+  return getFlagsFromConfig(config).includes("hidebreak");
+}
 
-  return getFlagsFromConfig(config)
-    .includes("hidebreak");
-
+function getHideSpecialsFromConfig(config){
+  return getFlagsFromConfig(config).includes("hidespecials");
 }
 
 // A show is "between seasons" when it is a returning series with no
@@ -1112,6 +1111,8 @@ async function sendConfigure(
     getHideBreakFromConfig(
       config
     );
+
+  const initialHideSpecials = getHideSpecialsFromConfig(config);
 
   const initialUseImdb =
     getUseImdbFromConfig(
@@ -2173,9 +2174,11 @@ Shows you search for are added to the selected row. Row 2 shows up in Stremio as
 Tap the X on a poster to remove a show.
 </div>
 
-<div
-  id="selected"
-></div>
+<div class="btnRow" style="margin:10px 0">
+<button class="btnGhost" type="button" onclick="clearActiveList()">Clear this row</button>
+<button class="btnGhost" type="button" id="undoRemoveButton" onclick="undoRemove()" hidden>Undo last change</button>
+</div>
+<div id="selected"></div>
 
 </div>
 
@@ -2403,6 +2406,22 @@ Hide shows between seasons
   ${initialHideBreak ? "checked" : ""}
 />
 </label>
+
+</div>
+
+<div class="section">
+
+<h2>
+Episode Display
+</h2>
+
+<label class="switchRow">
+<span>Hide season 0 specials</span>
+<input type="checkbox" class="toggle" id="hideSpecials"
+  onchange="updatePreview()"
+  ${initialHideSpecials ? "checked" : ""}/>
+</label>
+<div class="cardSub">Removes specials from the episode guide while keeping regular seasons intact.</div>
 
 </div>
 
@@ -2813,45 +2832,57 @@ function moveShow(
 
 }
 
-function removeShow(
-  id
-){
+let lastRemoved = null;
 
-  selected =
-    selected.filter(
-      show =>
-        show.id !== id
-    );
-
+function removeShow(id){
+  const index = selected.findIndex(show => show.id === id);
+  if(index < 0) return;
+  lastRemoved = { listNumber: activeList, items: selected.slice(), index };
+  selected = selected.filter(show => show.id !== id);
   renderSelected();
-
+  document.getElementById("undoRemoveButton").hidden = false;
+  setToast("Show removed. Tap Undo to restore it.");
 }
 
-function addShow(
-  id,
-  name,
-  poster
-){
-
-  if(
-    selected.some(
-      show =>
-        show.id === id
-    )
-  ){
-
-    return;
-
+function undoRemove(){
+  if(!lastRemoved) return;
+  const saved = lastRemoved;
+  if(saved.listNumber === activeList){
+    selected = saved.items.slice();
+    renderSelected();
+  }else{
+    stash[saved.listNumber] = saved.items.slice();
   }
+  lastRemoved = null;
+  document.getElementById("undoRemoveButton").hidden = true;
+  setToast("Change undone.");
+}
 
-  selected.push({
-    id:id,
-    name:name,
-    poster:poster || ""
-  });
-
+function clearActiveList(){
+  if(selected.length === 0) return;
+  if(!confirm("Clear every show from this row?")) return;
+  lastRemoved = { listNumber: activeList, items: selected.slice(), index: 0 };
+  selected = [];
   renderSelected();
+  document.getElementById("undoRemoveButton").hidden = false;
+  setToast("Row cleared. Tap Undo to restore it.");
+}
 
+function addShow(id, name, poster){
+  const numericId = Number(id);
+  if(!Number.isSafeInteger(numericId) || numericId <= 0) return;
+  const otherList = activeList === 1 ? stash[2] : stash[1];
+  if(selected.some(show => Number(show.id) === numericId) ||
+     (otherList || []).some(show => Number(show.id) === numericId)){
+    setToast("That show is already in one of your rows.");
+    return;
+  }
+  if(selected.length >= 100){
+    setToast("This row is full (100 shows maximum).");
+    return;
+  }
+  selected.push({id:numericId, name:String(name || "Unknown show"), poster:poster || ""});
+  renderSelected();
 }
 
 function addShowFromResult(
@@ -2971,6 +3002,23 @@ async function searchShows(){
   resultsBox.innerHTML =
     "";
 
+  const directId = query.match(/(?:themoviedb\\.org\\/tv\\/|^)(\\d+)/i);
+  if(directId){
+    try{
+      const response = await fetch("/api/shows?ids=" + directId[1]);
+      const data = await response.json();
+      if(data.results && data.results[0]){
+        addShow(data.results[0].id, data.results[0].name, "");
+        status.textContent = "Added show from TMDB ID.";
+      }else{
+        status.textContent = "No show found for that TMDB ID.";
+      }
+    }catch(error){
+      status.textContent = "Could not load that TMDB ID.";
+    }
+    return;
+  }
+
   try{
 
     const response =
@@ -3026,6 +3074,9 @@ async function searchShows(){
 
               "<div class='resultYear'>" +
                 escapeHtml(show.year || "") +
+              "</div>" +
+              "<div class='resultYear'>" +
+                escapeHtml(show.overview || "") +
               "</div>" +
 
             "</div>" +
@@ -3150,6 +3201,10 @@ function buildInstall(
     flagList.push(
       "imdb"
     );
+  }
+
+  if(document.getElementById("hideSpecials").checked){
+    flagList.push("hidespecials");
   }
 
   const hideFlag =
@@ -3599,27 +3654,31 @@ function copyText(
 
 }
 
+function selectedListSnapshot(number){
+  const list = number === activeList ? selected : stash[number];
+  return (list || []).map(show => ({id:Number(show.id), name:show.name || ""}));
+}
+
 function exportList(){
-
-  if(
-    selected.length === 0
-  ){
-    setToast(
-      "Add at least one show first."
-    );
-    return;
-  }
-
-  copyText(
-    selected
-      .map(
-        show =>
-          show.id
-      )
-      .join(","),
-    "List copied!"
-  );
-
+  const payload = {
+    app: "My Shows",
+    formatVersion: 1,
+    exportedAt: new Date().toISOString(),
+    lists: {
+      myshows: selectedListSnapshot(1),
+      row2: selectedListSnapshot(2),
+      row2Name: sanitizeList2Name(document.getElementById("list2Name").value)
+    },
+    settings: {
+      rows: rowNames.filter(row => document.getElementById("row-" + row).checked),
+      sort: document.getElementById("sortSelect").value,
+      hideEnded: document.getElementById("hideEnded").checked,
+      hideBreak: document.getElementById("hideBreak").checked,
+      hideSpecials: document.getElementById("hideSpecials").checked,
+      useImdb: document.getElementById("useImdb").checked
+    }
+  };
+  copyText(JSON.stringify(payload, null, 2), "Full backup copied!");
 }
 
 function parseImportIds(
@@ -3699,10 +3758,36 @@ function parseImportIds(
 
 async function importList(){
 
-  const box =
-    document.getElementById(
-      "importBox"
-    );
+  const box = document.getElementById("importBox");
+  const raw = String(box.value || "").trim();
+
+  if(raw.startsWith("{")){
+    try{
+      const backup = JSON.parse(raw);
+      if(backup && backup.app === "My Shows" && backup.lists){
+        const ids1 = (backup.lists.myshows || []).map(item => Number(item.id)).filter(id => Number.isSafeInteger(id) && id > 0).slice(0,100);
+        const ids2 = (backup.lists.row2 || []).map(item => Number(item.id)).filter(id => Number.isSafeInteger(id) && id > 0 && !ids1.includes(id)).slice(0,100);
+        const loaded = await Promise.all([fetchShowList(ids1), fetchShowList(ids2)]);
+        if(activeList === 1){ selected = loaded[0]; stash[2] = loaded[1]; }
+        else { stash[1] = loaded[0]; selected = loaded[1]; }
+        document.getElementById("list2Name").value = sanitizeList2Name(backup.lists.row2Name || "");
+        const settings = backup.settings || {};
+        if(Array.isArray(settings.rows)) rowNames.forEach(row => document.getElementById("row-" + row).checked = settings.rows.includes(row));
+        if(["myorder","nextepisode","recentlyaired","alphabetical"].includes(settings.sort)) setSort(settings.sort);
+        document.getElementById("hideEnded").checked = !!settings.hideEnded;
+        document.getElementById("hideBreak").checked = !!settings.hideBreak;
+        document.getElementById("hideSpecials").checked = !!settings.hideSpecials;
+        document.getElementById("useImdb").checked = !!settings.useImdb;
+        updateListTabs(); renderSelected(); loadPosters(); updatePreview();
+        box.value = "";
+        setToast("Full backup restored.");
+        return;
+      }
+    }catch(error){
+      setToast("That JSON backup could not be restored.");
+      return;
+    }
+  }
 
   const ids =
     parseImportIds(
@@ -4004,6 +4089,14 @@ async function loadExistingShows(){
 
 }
 
+let searchDebounce = null;
+document.getElementById("searchInput").addEventListener("input", () => {
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => {
+    if(document.getElementById("searchInput").value.trim().length >= 2) searchShows();
+  }, 500);
+});
+
 document.getElementById(
   "searchInput"
 ).addEventListener(
@@ -4096,7 +4189,7 @@ app.get(
       const query =
         String(
           req.query.query || ""
-        ).trim();
+        ).trim().slice(0, 100);
 
       if(!query){
 
@@ -4216,22 +4309,12 @@ app.get(
 
       }
 
-      const ids =
-        String(
-          req.query.ids || ""
-        )
-        .split(",")
-        .map(
-          id =>
-            Number(
-              id.trim()
-            )
-        )
-        .filter(
-          id =>
-            Number.isInteger(id) &&
-            id > 0
-        );
+      const ids = Array.from(new Set(
+        String(req.query.ids || "").split(",")
+          .slice(0, 200)
+          .map(id => Number(id.trim()))
+          .filter(id => Number.isSafeInteger(id) && id > 0)
+      ));
 
       await prefetchShows(
         ids.map(id => ({ tmdbId: id }))
@@ -4444,9 +4527,7 @@ async function sendManifest(
       "series"
     ],
 
-    idPrefixes:[
-      "tmdb:"
-    ],
+    idPrefixes: getUseImdbFromConfig(config) ? ["tt", "tmdb:"] : ["tmdb:"],
 
     behaviorHints:{
       configurable:true
@@ -4767,19 +4848,7 @@ HELPERS
 */
 
 function todayUTC(){
-
-  const today =
-    new Date();
-
-  today.setUTCHours(
-    0,
-    0,
-    0,
-    0
-  );
-
-  return today;
-
+  return new Date(todayInTimezone() + "T00:00:00Z");
 }
 
 function dayDiff(
@@ -4888,10 +4957,8 @@ function isReturningSoon(
       "T00:00:00Z"
     );
 
-  return (
-    target >
-    sevenDays
-  );
+  const days = daysUntil(dateString);
+  return days !== null && days > 7 && days <= 90;
 
 }
 
@@ -5814,7 +5881,8 @@ META
 async function sendMeta(
   req,
   res,
-  tmdbId
+  tmdbId,
+  config
 ){
 
   try{
@@ -5905,8 +5973,12 @@ async function sendMeta(
 
     }
 
+    const visibleEpisodes = getHideSpecialsFromConfig(config)
+      ? episodes.filter(episode => Number(episode.season_number) !== 0)
+      : episodes;
+
     const videos =
-      episodes.map(
+      visibleEpisodes.map(
         episode => {
 
           return {
@@ -6256,7 +6328,8 @@ app.get(
     await sendMeta(
       req,
       res,
-      tmdbId
+      tmdbId,
+      req.params.config || ""
     );
 
   }
@@ -6277,7 +6350,8 @@ app.get(
     await sendMeta(
       req,
       res,
-      tmdbId
+      tmdbId,
+      req.params.config || ""
     );
 
   }
