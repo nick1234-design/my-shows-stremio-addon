@@ -4510,7 +4510,7 @@ async function sendManifest(
       "com.nick1234.myshows",
 
     version:
-      "2.8.0",
+      "3.0.0",
 
     name:
       "My Shows",
