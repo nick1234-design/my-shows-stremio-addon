@@ -157,15 +157,7 @@ function isWithinNext7Days(
     return false;
   }
 
-  const today =
-    new Date();
-
-  today.setUTCHours(
-    0,
-    0,
-    0,
-    0
-  );
+  const today = new Date(todayInTimezone() + "T00:00:00Z");
 
   const target =
     new Date(
@@ -2883,6 +2875,7 @@ function addShow(id, name, poster){
   }
   selected.push({id:numericId, name:String(name || "Unknown show"), poster:poster || ""});
   renderSelected();
+  return true;
 }
 
 function addShowFromResult(
@@ -2897,18 +2890,11 @@ function addShowFromResult(
     return;
   }
 
-  addShow(
-    show.id,
-    show.name,
-    show.poster
-  );
-
-  button.textContent =
-    "Added";
-
-  button.classList.add(
-    "done"
-  );
+  const added = addShow(show.id, show.name, show.poster);
+  if(added){
+    button.textContent = "Added";
+    button.classList.add("done");
+  }
 
 }
 
@@ -3789,15 +3775,14 @@ async function importList(){
     }
   }
 
+  const otherList = activeList === 1 ? stash[2] : stash[1];
   const ids =
     parseImportIds(
       box.value || ""
     ).filter(
       id =>
-        !selected.some(
-          show =>
-            show.id === Number(id)
-        )
+        !selected.some(show => Number(show.id) === Number(id)) &&
+        !(otherList || []).some(show => Number(show.id) === Number(id))
     );
 
   if(
@@ -4527,7 +4512,9 @@ async function sendManifest(
       "series"
     ],
 
-    idPrefixes: getUseImdbFromConfig(config) ? ["tt", "tmdb:"] : ["tmdb:"],
+    // This addon resolves TMDB IDs itself; IMDb mode deliberately delegates
+    // IMDb show pages to Cinemeta rather than claiming unsupported tt metadata.
+    idPrefixes:["tmdb:"],
 
     behaviorHints:{
       configurable:true
@@ -4939,23 +4926,6 @@ function isReturningSoon(
   if(!dateString){
     return false;
   }
-
-  const today =
-    todayUTC();
-
-  const sevenDays =
-    new Date(today);
-
-  sevenDays.setUTCDate(
-    sevenDays.getUTCDate() +
-    7
-  );
-
-  const target =
-    new Date(
-      dateString +
-      "T00:00:00Z"
-    );
 
   const days = daysUntil(dateString);
   return days !== null && days > 7 && days <= 90;
