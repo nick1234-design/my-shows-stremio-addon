@@ -2092,8 +2092,8 @@ Find a show on TMDB and add it to your list.
 
 <button
   class="searchButton"
+  id="searchButton"
   type="button"
-  onclick="searchShows()"
 >
 Search
 </button>
@@ -2950,138 +2950,115 @@ function loadPosters(){
 
 }
 
+let activeSearchRequest = 0;
+
 async function searchShows(){
 
-  const input =
-    document.getElementById(
-      "searchInput"
-    );
-
-  const query =
-    input.value.trim();
-
-  const resultsBox =
-    document.getElementById(
-      "results"
-    );
-
-  const status =
-    document.getElementById(
-      "searchStatus"
-    );
+  const input = document.getElementById("searchInput");
+  const query = input.value.trim();
+  const resultsBox = document.getElementById("results");
+  const status = document.getElementById("searchStatus");
+  const button = document.getElementById("searchButton");
+  const requestId = ++activeSearchRequest;
 
   if(!query){
-
-    status.textContent =
-      "Enter a show name.";
-
-    resultsBox.innerHTML =
-      "";
-
-    return;
-
-  }
-
-  status.textContent =
-    "Searching...";
-
-  resultsBox.innerHTML =
-    "";
-
-  const directId = query.match(/(?:themoviedb\.org\/tv\/|^)(\d+)/i);
-  if(directId){
-    try{
-      const response = await fetch("/api/shows?ids=" + directId[1]);
-      const data = await response.json();
-      if(data.results && data.results[0]){
-        addShow(data.results[0].id, data.results[0].name, "");
-        status.textContent = "Added show from TMDB ID.";
-      }else{
-        status.textContent = "No show found for that TMDB ID.";
-      }
-    }catch(error){
-      status.textContent = "Could not load that TMDB ID.";
-    }
+    button.disabled = false;
+    button.textContent = "Search";
+    status.textContent = "Enter a show name.";
+    resultsBox.innerHTML = "";
+    input.focus();
     return;
   }
+
+  status.textContent = "Searching TMDB...";
+  resultsBox.innerHTML = "";
+  lastResults = [];
+  button.disabled = true;
+  button.textContent = "Searching...";
 
   try{
 
-    const response =
-      await fetch(
-        "/api/search?query=" +
-        encodeURIComponent(
-          query
-        )
-      );
+    const directId = query.match(/(?:themoviedb\.org\/tv\/|^)(\d+)/i);
+    const endpoint = directId
+      ? "/api/shows?ids=" + encodeURIComponent(directId[1])
+      : "/api/search?query=" + encodeURIComponent(query);
 
-    const data =
-      await response.json();
+    const response = await fetch(endpoint, {
+      method: "GET",
+      headers: { "Accept": "application/json" },
+      cache: "no-store"
+    });
 
-    status.textContent =
-      "";
-
-    if(
-      !data.results ||
-      data.results.length === 0
-    ){
-
-      lastResults =
-        [];
-
-      resultsBox.innerHTML =
-        "<div class='empty'>No shows found.</div>";
-
-      return;
-
+    let data;
+    try{
+      data = await response.json();
+    }catch(parseError){
+      throw new Error("The add-on returned an unreadable response. Refresh the page and try again.");
     }
 
-    lastResults =
-      data.results;
+    if(!response.ok){
+      throw new Error(
+        data && data.error
+          ? data.error
+          : "Search request failed (HTTP " + response.status + ")."
+      );
+    }
 
-    resultsBox.innerHTML =
-      data.results.map(
-        (show, index) =>
-          "<div class='result'>" +
+    if(requestId !== activeSearchRequest) return;
 
-            (
-              show.poster
-                ? "<img src='" +
-                  escapeHtml(show.poster) +
-                  "' alt=''>"
-                : "<div class='noPoster'></div>"
-            ) +
+    const matches = Array.isArray(data.results) ? data.results : [];
 
-            "<div class='resultInfo'>" +
+    if(directId){
+      if(matches.length === 0){
+        status.textContent = "No TV show found for that TMDB ID.";
+      }else{
+        const show = matches[0];
+        const added = addShow(show.id, show.name, show.poster || "");
+        status.textContent = added
+          ? "Added " + show.name + " to your list."
+          : "That show is already in your list or this row is full.";
+      }
+      return;
+    }
 
-              "<div class='resultName'>" +
-                escapeHtml(show.name) +
-              "</div>" +
+    if(matches.length === 0){
+      status.textContent = "No shows found. Try another title.";
+      resultsBox.innerHTML = "<div class='empty'>No shows found.</div>";
+      return;
+    }
 
-              "<div class='resultYear'>" +
-                escapeHtml(show.year || "") +
-              "</div>" +
-              "<div class='resultYear'>" +
-                escapeHtml(show.overview || "") +
-              "</div>" +
+    lastResults = matches;
 
-            "</div>" +
+    resultsBox.innerHTML = matches.map((show, index) =>
+      "<div class='result'>" +
+        (show.poster
+          ? "<img src='" + escapeHtml(show.poster) + "' alt=''>"
+          : "<div class='noPoster'></div>") +
+        "<div class='resultInfo'>" +
+          "<div class='resultName'>" + escapeHtml(show.name || "Untitled") + "</div>" +
+          "<div class='resultYear'>" + escapeHtml(show.year || "") + "</div>" +
+          "<div class='resultYear'>" + escapeHtml(show.overview || "") + "</div>" +
+        "</div>" +
+        "<button class='addButton' type='button' onclick='addShowFromResult(" + index + ", this)'>Add</button>" +
+      "</div>"
+    ).join("");
 
-            "<button class='addButton' type='button' onclick='addShowFromResult(" +
-              index +
-              ", this)'>Add</button>" +
-
-          "</div>"
-      ).join("");
+    status.textContent = matches.length + " results found.";
 
   }catch(error){
 
-    console.error(
-      error
-    );
+    if(requestId !== activeSearchRequest) return;
+    console.error("My Shows search failed:", error);
+    status.textContent = error && error.message
+      ? error.message
+      : "Search failed. Check your connection and try again.";
 
-    status.textContent =
-      "Search failed.";
+  }finally{
+
+    if(requestId === activeSearchRequest){
+      button.disabled = false;
+      button.textContent = "Search";
+    }
 
   }
 
@@ -4082,22 +4059,19 @@ document.getElementById("searchInput").addEventListener("input", () => {
   }, 500);
 });
 
-document.getElementById(
-  "searchInput"
-).addEventListener(
-  "keydown",
-  event => {
+document.getElementById("searchButton").addEventListener("click", event => {
+  event.preventDefault();
+  clearTimeout(searchDebounce);
+  searchShows();
+});
 
-    if(
-      event.key === "Enter"
-    ){
-
-      searchShows();
-
-    }
-
+document.getElementById("searchInput").addEventListener("keydown", event => {
+  if(event.key === "Enter"){
+    event.preventDefault();
+    clearTimeout(searchDebounce);
+    searchShows();
   }
-);
+});
 
 initializeRows();
 
@@ -4253,16 +4227,23 @@ app.get(
     }catch(error){
 
       console.error(
-        error.response
-          ? error.response.data
-          : error.message
+        "TMDB TV search failed:",
+        error.response ? error.response.data : error.message
       );
 
+      const upstreamStatus = error.response ? error.response.status : 0;
+      const message = upstreamStatus === 401
+        ? "TMDB rejected the API key. Check TMDB_API_KEY in Vercel Environment Variables."
+        : upstreamStatus === 429
+          ? "TMDB search is temporarily rate-limited. Please wait and try again."
+          : upstreamStatus >= 500
+            ? "TMDB is temporarily unavailable. Please try again."
+            : "Could not search TMDB. Check your API key and connection.";
+
       res
-        .status(500)
+        .status(502)
         .json({
-          error:
-            "Failed to search TV shows"
+          error: message
         });
 
     }
