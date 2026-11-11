@@ -3002,7 +3002,7 @@ async function searchShows(){
   resultsBox.innerHTML =
     "";
 
-  const directId = query.match(/(?:themoviedb\\.org\\/tv\\/|^)(\\d+)/i);
+  const directId = query.match(/(?:themoviedb\.org\/tv\/|^)(\d+)/i);
   if(directId){
     try{
       const response = await fetch("/api/shows?ids=" + directId[1]);
